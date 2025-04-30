@@ -8,7 +8,7 @@ export enum UserRole {
 
 export const authorizeRoles = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const userRole: UserRole = req.user?.role;
+    const userRole = req.user?.role as UserRole;
 
     if (!roles.includes(userRole)) {
       return res

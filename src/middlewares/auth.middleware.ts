@@ -1,8 +1,9 @@
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
+import { IUser } from "../types";
 
 interface JwtPayload {
-  id: string;
+  _id: string;
   role: string;
 }
 
@@ -24,7 +25,7 @@ export const authenticate = (
       token,
       process.env.JWT_SECRET as string
     ) as JwtPayload;
-    req.user = decoded; // attach to request
+    req.user = decoded as IUser; // attach to request
     next();
   } catch (error) {
     return res.status(403).json({ message: "Invalid or expired token" });
