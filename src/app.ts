@@ -9,6 +9,7 @@ import userRoutes from "./routes/user.routes";
 import donorRoutes from "./routes/donor.routes";
 import adminRoutes from "./routes/admin.routes";
 import organizationRoutes from "./routes/organization.routes";
+import "./types/request.types";
 
 
 dotenv.config();

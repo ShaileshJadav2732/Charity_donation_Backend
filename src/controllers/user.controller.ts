@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import User from "../models/user.model";
+import User from "../models/User.model";
 
 export const registerUser = async (req: Request, res: Response) => {
   try {
@@ -31,7 +31,6 @@ export const registerUser = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error during registration" });
   }
 };
-
 
 export const loginUser = async (req: Request, res: Response) => {
   try {
