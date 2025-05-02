@@ -1,79 +1,62 @@
+import { Organization } from "./../../models/Organization.model";
 import { Request, Response } from "express";
 import { Donation } from "../../models/Donation.model";
 import { IUser } from "../../types/user.types";
 import { Donor } from "../../models/Donor.model";
+import { IDonor } from "../../types";
 
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		const userId = (req.user as IUser).id;
 
-		const { type, quantity, pickupAddress, preferredTime } = req.body;
+		const { type, quantity, pickupAddress, preferredTime, organization } =
+			req.body;
 
 		// Validate required fields
-		if (!type || !quantity || !pickupAddress || !preferredTime) {
+		if (
+			!type ||
+			!quantity ||
+			!pickupAddress ||
+			!preferredTime ||
+			!organization
+		) {
 			return res.status(400).json({ message: "All fields are required" });
 		}
-		// Fetch the donor document using the logged-in user ID
+
 		const donor = await Donor.findOne({ user: userId });
 		if (!donor) {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
-		// Handling different donation types and quantity validation
-		switch (type.toLowerCase()) {
-			case "blood":
-				// For blood, ensure quantity is in "unit(s)"
-				if (!quantity.toLowerCase().includes("unit")) {
-					return res
-						.status(400)
-						.json({ message: "Blood quantity must be in 'unit(s)'" });
-				}
-				break;
+		if (
+			!organization ||
+			!type ||
+			!quantity ||
+			!pickupAddress ||
+			!preferredTime
+		) {
+			return res
+				.status(400)
+				.json({ message: "All required fields must be filled" });
+		}
 
-			case "clothes":
-				// For clothes, ensure quantity is in "bag(s)"
-				if (!quantity.toLowerCase().includes("bag")) {
-					return res
-						.status(400)
-						.json({ message: "Clothes quantity must be in 'bag(s)'" });
-				}
-				break;
+		//  Find organization
+		const org = await Organization.findById(organization);
+		if (!org) {
+			return res.status(404).json({ message: "Organization not found" });
+		}
 
-			case "food":
-				// For food, ensure quantity is in "packet(s)"
-				if (!quantity.toLowerCase().includes("packet")) {
-					return res
-						.status(400)
-						.json({ message: "Food quantity must be in 'packet(s)'" });
-				}
-				break;
-
-			case "money":
-				// For money, it should be a numerical value
-				const moneyAmount = parseInt(quantity);
-				if (isNaN(moneyAmount) || moneyAmount <= 0) {
-					return res
-						.status(400)
-						.json({ message: "Money quantity must be a positive number" });
-				}
-				break;
-
-			case "books":
-				// For books, ensure quantity is in "book(s)"
-				if (!quantity.toLowerCase().includes("book")) {
-					return res
-						.status(400)
-						.json({ message: "Books quantity must be in 'book(s)'" });
-				}
-				break;
-
-			default:
-				return res.status(400).json({ message: "Invalid donation type" });
+		//Check if donation type is accepted
+		if (!org.acceptedDonationTypes.includes(type)) {
+			return res.status(400).json({
+				message: `This organization does not accept ${type} donations.`,
+			});
 		}
 
 		// Create a new donation record
 		const donation = await Donation.create({
 			donor: donor.id,
+			organization,
 			type,
 			quantity,
 			pickupAddress,
@@ -88,5 +71,53 @@ export const createDonation = async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error("Error creating donation:", error);
 		res.status(500).json({ message: "Server error" });
+	}
+};
+
+export const getMyDonations = async (req: Request, res: Response) => {
+	try {
+		const userId = (req.user as IUser).id; // Comes from auth middleware
+
+		const donor = await Donor.findOne({ user: userId });
+
+		if (!donor) {
+			return res.status(404).json({ message: "Donor profile not found" });
+		}
+
+		const donorId = donor.id; // Get the donor's ID from the donor document
+
+		const donations = await Donation.find({ donor: donorId })
+			.populate("organization", "orgName profilePhoto") // populate basic org info
+			.sort({ createdAt: -1 }); // latest first
+
+		res.status(200).json({
+			message: "Donations fetched successfully",
+			donations,
+		});
+	} catch (error) {
+		console.error("Error fetching donations:", error);
+		res.status(500).json({ message: "Server error while fetching donations" });
+	}
+};
+
+export const getDonationById = async (req: Request, res: Response) => {
+	try {
+		const donationId = req.params.id;
+
+		const donation = await Donation.findById(donationId)
+			.populate("donor", "name email") // assuming User model has name/email
+			.populate("organization", "orgName profilePhoto"); // if organization field is in the model
+
+		if (!donation) {
+			return res.status(404).json({ message: "Donation not found" });
+		}
+
+		res.status(200).json({
+			message: "Donation fetched successfully",
+			donation,
+		});
+	} catch (error) {
+		console.error("Error fetching donation by ID:", error);
+		res.status(500).json({ message: "Server error while fetching donation" });
 	}
 };
