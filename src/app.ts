@@ -10,7 +10,7 @@ import donorRoutes from "./routes/donor.routes";
 import adminRoutes from "./routes/admin.routes";
 import organizationRoutes from "./routes/organization.routes";
 import "./types/request.types";
-
+import donationRoutes from "./routes/donation.routes";
 
 dotenv.config();
 
@@ -28,6 +28,8 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/donor", donorRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/org", organizationRoutes);
+
+app.use("/api/donations", donationRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
