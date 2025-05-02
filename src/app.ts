@@ -27,13 +27,13 @@ app.use("/api/roles", roleRoutes);
 
 app.use("/api/donor", donorRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/org", organizationRoutes);
+app.use("/api/organization", organizationRoutes);
 
 app.use("/api/donations", donationRoutes);
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+	console.log(`Server is running on port ${PORT}`);
 });
 
 export default app;
