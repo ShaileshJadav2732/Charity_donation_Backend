@@ -34,7 +34,12 @@ router.put(
 	checkOrganizationProfileCompleted,
 	updateOrganizationProfile
 );
-router.patch("/donations/status", authenticate, updateDonationStatus);
+router.patch(
+	"/donations/status",
+	authenticate,
+	authorizeRoles("organization"),
+	updateDonationStatus
+);
 router.get("/all", getAllOrganizations); // Public route to view all organizations
 
 export default router;

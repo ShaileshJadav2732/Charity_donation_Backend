@@ -151,3 +151,34 @@ export const getDonationsForOrganization = async (
 		res.status(500).json({ message: "Server error" });
 	}
 };
+export const getDonationsByFilter = async (req: Request, res: Response) => {
+	try {
+		const { type } = req.query;
+		const page = parseInt(req.query.page as string) || 1;
+		const limit = parseInt(req.query.limit as string) || 10;
+		const skip = (page - 1) * limit;
+
+		const query: any = {};
+		if (type) query.type = type;
+
+		const total = await Donation.countDocuments(query);
+		const donations = await Donation.find(query)
+			.skip(skip)
+			.limit(limit)
+			.sort({ createdAt: -1 });
+
+		res.status(200).json({
+			message: "Donations fetched successfully",
+			donations,
+			pagination: {
+				total,
+				page,
+				limit,
+				totalPages: Math.ceil(total / limit),
+			},
+		});
+	} catch (error) {
+		console.error("Error fetching donations:", error);
+		res.status(500).json({ message: "Server error while fetching donations" });
+	}
+};

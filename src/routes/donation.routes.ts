@@ -7,6 +7,7 @@ import {
 import { authenticate } from "../middlewares/auth.middleware";
 import { getDonationsForOrganization } from "../controllers/donor/donation.controller";
 import { authorizeRoles } from "../middlewares/role.middleware";
+import { getDonationsByFilter } from "../controllers/donor/donation.controller";
 
 const router = express.Router();
 
@@ -21,4 +22,5 @@ router.get(
 	getDonationsForOrganization
 );
 
+router.get("/filter", authenticate, getDonationsByFilter);
 export default router;
