@@ -8,6 +8,8 @@ import {
 	getAllOrganizations,
 } from "../controllers/organization/organization.controller";
 import { checkOrganizationProfileCompleted } from "../middlewares/checkOrgProfile";
+import { updateDonationStatus } from "../controllers/organization/organization.controller";
+
 const router = Router();
 
 // Protected routes
@@ -32,7 +34,7 @@ router.put(
 	checkOrganizationProfileCompleted,
 	updateOrganizationProfile
 );
-
+router.patch("/donations/status", authenticate, updateDonationStatus);
 router.get("/all", getAllOrganizations); // Public route to view all organizations
 
 export default router;

@@ -121,3 +121,33 @@ export const getDonationById = async (req: Request, res: Response) => {
 		res.status(500).json({ message: "Server error while fetching donation" });
 	}
 };
+
+export const getDonationsForOrganization = async (
+	req: Request,
+	res: Response
+) => {
+	try {
+		const userId = (req.user as IUser).id;
+
+		// Get organization profile based on user ID
+		const organization = await Organization.findOne({ user: userId });
+		if (!organization) {
+			return res
+				.status(404)
+				.json({ message: "Organization profile not found" });
+		}
+
+		// Find donations linked to this organization
+		const donations = await Donation.find({ organization: organization._id })
+			.populate("donor", "name email") // assuming donor has name/email
+			.sort({ createdAt: -1 });
+
+		res.status(200).json({
+			message: "Donations for organization fetched successfully",
+			donations,
+		});
+	} catch (error) {
+		console.error("Error fetching donations for organization:", error);
+		res.status(500).json({ message: "Server error" });
+	}
+};

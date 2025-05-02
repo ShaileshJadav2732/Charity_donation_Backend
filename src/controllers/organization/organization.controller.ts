@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Organization } from "../../models/Organization.model";
 import { IUser } from "../../types";
 import { IOrganization } from "../../models/Organization.model";
-
+import { Donation } from "../../models/Donation.model";
 export const completeOrganizationProfile = async (
 	req: Request,
 	res: Response
@@ -120,5 +120,43 @@ export const getAllOrganizations = async (req: Request, res: Response) => {
 	} catch (error) {
 		console.error("Error fetching organizations:", error);
 		res.status(500).json({ message: "Server error" });
+	}
+};
+
+export const updateDonationStatus = async (req: Request, res: Response) => {
+	try {
+		const { donationId, status } = req.body;
+		const organizationId = (req.user as IUser).id;
+
+		// Check if the status is valid
+		if (!["pending", "accepted", "completed"].includes(status)) {
+			return res.status(400).json({ message: "Invalid status" });
+		}
+
+		// Find the donation by ID and ensure it belongs to the logged-in organization
+		const donation = await Donation.findById(donationId);
+		if (!donation) {
+			return res.status(404).json({ message: "Donation not found" });
+		}
+
+		if (String(donation.organization) !== String(organizationId)) {
+			return res.status(403).json({
+				message: "You are not authorized to update this donation's status",
+			});
+		}
+
+		// Update the donation status
+		donation.status = status;
+		await donation.save();
+
+		res.status(200).json({
+			message: "Donation status updated successfully",
+			donation,
+		});
+	} catch (error) {
+		console.error("Error updating donation status:", error);
+		res
+			.status(500)
+			.json({ message: "Server error while updating donation status" });
 	}
 };
