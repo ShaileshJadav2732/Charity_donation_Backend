@@ -1,9 +1,8 @@
-import { Organization } from "./../../models/Organization.model";
 import { Request, Response } from "express";
 import { Donation } from "../../models/Donation.model";
-import { IUser } from "../../types/user.types";
 import { Donor } from "../../models/Donor.model";
-import { IDonor } from "../../types";
+import { IUser } from "../../types/user.types";
+import { Organization } from "./../../models/Organization.model";
 
 export const createDonation = async (req: Request, res: Response) => {
 	try {

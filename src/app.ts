@@ -4,14 +4,14 @@ import dotenv from "dotenv";
 import morgan from "morgan";
 import connectDB from "./config/db";
 import roleRoutes from "./routes/role.routes";
-import userRoutes from "./routes/user.routes";
+// import userRoutes from "./routes/user.routes";
 
 import donorRoutes from "./routes/donor.routes";
 import adminRoutes from "./routes/admin.routes";
 import organizationRoutes from "./routes/organization.routes";
 import "./types/request.types";
 import donationRoutes from "./routes/donation.routes";
-
+import authRoutes from "./routes/auth.routes";
 dotenv.config();
 
 const app = express();
@@ -22,7 +22,9 @@ app.use(morgan("dev"));
 connectDB();
 // app.use("/api/users", userRoutes);
 
-app.use("/api/users", userRoutes);
+// app.use("/api/users", userRoutes);
+
+app.use("/api/auth", authRoutes);
 app.use("/api/roles", roleRoutes);
 
 app.use("/api/donor", donorRoutes);
