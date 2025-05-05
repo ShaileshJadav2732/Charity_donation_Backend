@@ -1,45 +1,31 @@
-import { Router } from "express";
-import { authenticate } from "../middlewares/auth.middleware";
-import { authorizeRoles } from "../middlewares/role.middleware";
+import express from "express";
 import {
-	completeOrganizationProfile,
 	getOrganizationProfile,
+	completeOrganizationProfile,
 	updateOrganizationProfile,
-	getAllOrganizations,
-} from "../controllers/organization/organization.controller";
-import { checkOrganizationProfileCompleted } from "../middlewares/checkOrgProfile";
-import { updateDonationStatus } from "../controllers/organization/organization.controller";
+	listOrganizations,
+	getOrganizationById,
+} from "../controllers/organization.controller";
+import { auth, authorize } from "../middleware/auth.middleware";
 
-const router = Router();
+const router = express.Router();
+
+// Public routes
+router.get("/", listOrganizations);
+router.get("/:id", getOrganizationById);
 
 // Protected routes
+router.use(auth);
+router.get("/profile", authorize("organization"), getOrganizationProfile);
 router.post(
-	"/create",
-	authenticate,
-	authorizeRoles("organization"), // Ensure the user has the 'organization' role
+	"/complete-profile",
+	authorize("organization"),
 	completeOrganizationProfile
 );
-
-router.get(
-	"/profile",
-	authenticate,
-	authorizeRoles("organization"),
-	checkOrganizationProfileCompleted,
-	getOrganizationProfile
-);
 router.put(
-	"/profile",
-	authenticate,
-	authorizeRoles("organization"),
-	checkOrganizationProfileCompleted,
+	"/update-profile",
+	authorize("organization"),
 	updateOrganizationProfile
 );
-router.patch(
-	"/donations/status",
-	authenticate,
-	authorizeRoles("organization"),
-	updateDonationStatus
-);
-router.get("/all", getAllOrganizations); // Public route to view all organizations
 
 export default router;

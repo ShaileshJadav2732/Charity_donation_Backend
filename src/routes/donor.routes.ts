@@ -1,25 +1,19 @@
 import express from "express";
-import { getDonorProfile } from "../controllers/donor/donor.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { authorizeRoles } from "../middlewares/role.middleware";
-import { checkDonorProfileComplete } from "../middlewares/checkDonorProfile";
-import { completeDonorProfile } from "../controllers/donor/donor.controller";
-import { updateDonorProfile } from "./../controllers/donor/donor.controller";
+import {
+	getDonorProfile,
+	completeDonorProfile,
+	updateDonorProfile,
+} from "../controllers/donor.controller";
+import { auth, authorize } from "../middleware/auth.middleware";
+
 const router = express.Router();
 
-router.get(
-  "/profile",
-  authenticate,
-  authorizeRoles("donor"),
-  checkDonorProfileComplete,
-  getDonorProfile
-);
-router.post("/complete-profile", authenticate, completeDonorProfile);
-router.put(
-  "/update-profile",
-  authenticate,
-  authorizeRoles("donor"),
-  checkDonorProfileComplete,
-  updateDonorProfile
-);
+// Apply authentication middleware to all routes
+router.use(auth);
+
+// Donor routes
+router.get("/profile", authorize("donor"), getDonorProfile);
+router.post("/complete-profile", authorize("donor"), completeDonorProfile);
+router.put("/update-profile", authorize("donor"), updateDonorProfile);
+
 export default router;

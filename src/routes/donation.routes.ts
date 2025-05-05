@@ -1,26 +1,33 @@
 import express from "express";
 import {
 	createDonation,
+	getDonorDonations,
+	getOrganizationDonations,
 	getDonationById,
-	getMyDonations,
-} from "../controllers/donor/donation.controller";
-import { authenticate } from "../middlewares/auth.middleware";
-import { getDonationsForOrganization } from "../controllers/donor/donation.controller";
-import { authorizeRoles } from "../middlewares/role.middleware";
-import { getDonationsByFilter } from "../controllers/donor/donation.controller";
+	updateDonationStatus,
+	cancelDonation,
+} from "../controllers/donation.controller";
+import { auth, authorize } from "../middleware/auth.middleware";
 
 const router = express.Router();
 
-router.post("/create", authenticate, createDonation);
-router.get("/my-donations", authenticate, getMyDonations);
-router.get("/my-donations/:id", authenticate, getDonationById);
+// All routes require authentication
+router.use(auth);
 
+// Donor routes
+router.post("/", authorize("donor"), createDonation);
+router.get("/my-donations", authorize("donor"), getDonorDonations);
+router.put("/:id/cancel", authorize("donor"), cancelDonation);
+
+// Organization routes
 router.get(
-	"/organization",
-	authenticate,
-	authorizeRoles("organization"),
-	getDonationsForOrganization
+	"/org-donations",
+	authorize("organization"),
+	getOrganizationDonations
 );
+router.put("/:id/status", authorize("organization"), updateDonationStatus);
 
-router.get("/filter", authenticate, getDonationsByFilter);
+// Common routes
+router.get("/:id", getDonationById);
+
 export default router;
