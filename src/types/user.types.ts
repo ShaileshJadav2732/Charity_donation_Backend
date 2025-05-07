@@ -8,4 +8,5 @@ export interface IUser {
 	role: UserRole;
 	createdAt: Date;
 	updatedAt: Date;
+	isProfileCompleted?: boolean;
 }

@@ -1,53 +1,23 @@
-import mongoose, { Schema, Document } from "mongoose";
-import { IUser } from "./user.model";
+import { Schema, model, Document, Types } from "mongoose";
 
 export interface IDonor extends Document {
-	user: IUser["_id"];
-	profilePhoto: string;
+	user: Types.ObjectId;
 	fullAddress: string;
 	phone: string;
+	profilePhoto?: string;
 	donationPreferences: string[];
 	availability: string;
 	isProfileCompleted: boolean;
-	createdAt: Date;
-	updatedAt: Date;
 }
 
-const donorSchema = new Schema<IDonor>(
-	{
-		user: {
-			type: Schema.Types.ObjectId,
-			ref: "User",
-			required: true,
-		},
-		profilePhoto: {
-			type: String,
-			default: "",
-		},
-		fullAddress: {
-			type: String,
-			default: "",
-		},
-		phone: {
-			type: String,
-			default: "",
-		},
-		donationPreferences: {
-			type: [String],
-			default: [],
-		},
-		availability: {
-			type: String,
-			default: "",
-		},
-		isProfileCompleted: {
-			type: Boolean,
-			default: false,
-		},
-	},
-	{ timestamps: true }
-);
+const donorSchema = new Schema<IDonor>({
+	user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+	fullAddress: { type: String, required: true },
+	phone: { type: String, required: true },
+	profilePhoto: String,
+	donationPreferences: [{ type: String, required: true }],
+	availability: { type: String, required: true },
+	isProfileCompleted: { type: Boolean, default: false },
+});
 
-const Donor = mongoose.model<IDonor>("Donor", donorSchema);
-
-export default Donor;
+export default model<IDonor>("Donor", donorSchema);

@@ -1,96 +1,163 @@
-import { Response } from 'express';
-import { AuthRequest } from '../middleware/auth.middleware';
-import Donor from '../models/donor.model';
-import User from '../models/user.model';
+import { Request, Response } from "express";
+import Donor from "../models/donor.model";
+import User from "../models/user.model";
+
+// Using the correct interface from firebase-auth controller
+interface AuthRequest extends Request {
+	user: {
+		uid: string;
+		dbUser: {
+			_id: string;
+			email: string;
+			role: string;
+			displayName?: string;
+			photoURL?: string;
+		};
+	};
+}
 
 // Get donor profile
 export const getDonorProfile = async (req: AuthRequest, res: Response) => {
-  try {
-    const donor = await Donor.findOne({ user: req.user._id }).populate('user', 'username email displayName photoURL');
+	try {
+		const userId = req.user.dbUser._id;
 
-    if (!donor) {
-      return res.status(404).json({ message: 'Donor profile not found' });
-    }
+		console.log("Getting donor profile for user ID:", userId);
 
-    res.status(200).json(donor);
-  } catch (error) {
-    console.error('Get donor profile error:', error);
-    res.status(500).json({ message: 'Failed to fetch donor profile' });
-  }
+		const donor = await Donor.findOne({ user: userId }).populate(
+			"user",
+			"email displayName photoURL"
+		);
+
+		if (!donor) {
+			console.log("Donor profile not found for user ID:", userId);
+			return res.status(404).json({ message: "Donor profile not found" });
+		}
+
+		console.log("Found donor profile:", donor);
+		return res.status(200).json({ donor });
+	} catch (error) {
+		console.error("Get donor profile error:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
 };
 
 // Complete donor profile
 export const completeDonorProfile = async (req: AuthRequest, res: Response) => {
-  try {
-    const { profilePhoto, fullAddress, phone, donationPreferences, availability } = req.body;
+	try {
+		const userId = req.user.dbUser._id;
+		const {
+			fullAddress,
+			phone,
+			profilePhoto,
+			donationPreferences,
+			availability,
+		} = req.body;
 
-    // Validate required fields
-    if (!profilePhoto || !fullAddress || !phone || !donationPreferences || !availability) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
+		console.log("Complete profile request:", {
+			userId,
+			fullAddress,
+			phone,
+			donationPreferences,
+			availability,
+		});
 
-    // Find donor
-    let donor = await Donor.findOne({ user: req.user._id });
+		// Validate required fields
+		if (!fullAddress || !phone || !donationPreferences || !availability) {
+			return res.status(400).json({
+				message: "Missing required fields",
+				received: { fullAddress, phone, donationPreferences, availability },
+			});
+		}
 
-    if (!donor) {
-      // Create donor profile if not exists
-      donor = await Donor.create({
-        user: req.user._id,
-        profilePhoto,
-        fullAddress,
-        phone,
-        donationPreferences,
-        availability,
-        isProfileCompleted: true,
-      });
-    } else {
-      // Update existing profile
-      donor.profilePhoto = profilePhoto;
-      donor.fullAddress = fullAddress;
-      donor.phone = phone;
-      donor.donationPreferences = donationPreferences;
-      donor.availability = availability;
-      donor.isProfileCompleted = true;
-      await donor.save();
-    }
+		if (
+			!Array.isArray(donationPreferences) ||
+			donationPreferences.length === 0
+		) {
+			return res.status(400).json({
+				message: "Donation preferences must be an array with at least one item",
+			});
+		}
 
-    res.status(200).json({
-      message: 'Donor profile completed successfully',
-      donor,
-    });
-  } catch (error) {
-    console.error('Complete donor profile error:', error);
-    res.status(500).json({ message: 'Failed to complete donor profile' });
-  }
+		// Check if donor already exists
+		let donor = await Donor.findOne({ user: userId });
+
+		if (donor) {
+			console.log("Updating existing donor profile for user ID:", userId);
+			// Update existing donor
+			donor.fullAddress = fullAddress;
+			donor.phone = phone;
+			donor.profilePhoto = profilePhoto;
+			donor.donationPreferences = donationPreferences;
+			donor.availability = availability;
+			donor.isProfileCompleted = true;
+		} else {
+			console.log("Creating new donor profile for user ID:", userId);
+			// Create new donor
+			donor = new Donor({
+				user: userId,
+				fullAddress,
+				phone,
+				profilePhoto,
+				donationPreferences,
+				availability,
+				isProfileCompleted: true,
+			});
+		}
+
+		await donor.save();
+
+		// Populate user data
+		await donor.populate("user", "email displayName photoURL");
+
+		console.log("Donor profile completed successfully:", donor);
+		return res.status(200).json({
+			message: "Donor profile completed successfully",
+			donor,
+		});
+	} catch (error) {
+		console.error("Complete donor profile error:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
 };
 
 // Update donor profile
 export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
-  try {
-    const updateData = req.body;
+	try {
+		const userId = req.user.dbUser._id;
+		const {
+			fullAddress,
+			phone,
+			profilePhoto,
+			donationPreferences,
+			availability,
+		} = req.body;
 
-    // Find donor
-    const donor = await Donor.findOne({ user: req.user._id });
+		const donor = await Donor.findOne({ user: userId });
 
-    if (!donor) {
-      return res.status(404).json({ message: 'Donor profile not found' });
-    }
+		if (!donor) {
+			return res.status(404).json({ message: "Donor profile not found" });
+		}
 
-    // Update fields
-    Object.keys(updateData).forEach((key) => {
-      if (key !== 'user' && key !== '_id') {
-        (donor as any)[key] = updateData[key];
-      }
-    });
+		// Update fields if provided
+		if (fullAddress) donor.fullAddress = fullAddress;
+		if (phone) donor.phone = phone;
+		if (profilePhoto !== undefined) donor.profilePhoto = profilePhoto;
+		if (donationPreferences && Array.isArray(donationPreferences)) {
+			donor.donationPreferences = donationPreferences;
+		}
+		if (availability) donor.availability = availability;
 
-    await donor.save();
+		await donor.save();
 
-    res.status(200).json({
-      message: 'Donor profile updated successfully',
-      donor,
-    });
-  } catch (error) {
-    console.error('Update donor profile error:', error);
-    res.status(500).json({ message: 'Failed to update donor profile' });
-  }
+		// Populate user data
+		await donor.populate("user", "email displayName photoURL");
+
+		return res.status(200).json({
+			message: "Donor profile updated successfully",
+			donor,
+		});
+	} catch (error) {
+		console.error("Update donor profile error:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
 };

@@ -4,16 +4,23 @@ import {
 	completeDonorProfile,
 	updateDonorProfile,
 } from "../controllers/donor.controller";
-import { auth, authorize } from "../middleware/auth.middleware";
+import {
+	validateFirebaseToken,
+	requireRole,
+} from "../controllers/auth/firebase-auth.controller";
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
-router.use(auth);
+// All routes require authentication
+router.use(validateFirebaseToken);
 
-// Donor routes
-router.get("/profile", authorize("donor"), getDonorProfile);
-router.post("/complete-profile", authorize("donor"), completeDonorProfile);
-router.put("/update-profile", authorize("donor"), updateDonorProfile);
+// Get donor profile - donor only
+router.get("/profile", requireRole("donor"), getDonorProfile);
+
+// Complete donor profile - donor only
+router.post("/complete-profile", requireRole("donor"), completeDonorProfile);
+
+// Update donor profile - donor only
+router.put("/update-profile", requireRole("donor"), updateDonorProfile);
 
 export default router;

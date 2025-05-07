@@ -1,7 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IUser extends Document {
-	username: string;
 	email: string;
 	firebaseUid: string;
 	role: "donor" | "organization" | "admin";
@@ -10,16 +9,11 @@ export interface IUser extends Document {
 	emailVerified: boolean;
 	createdAt: Date;
 	updatedAt: Date;
+	isProfileCompleted: boolean;
 }
 
 const userSchema = new Schema<IUser>(
 	{
-		username: {
-			type: String,
-			required: true,
-			unique: true,
-			trim: true,
-		},
 		email: {
 			type: String,
 			required: true,
@@ -49,7 +43,12 @@ const userSchema = new Schema<IUser>(
 			type: Boolean,
 			default: false,
 		},
+		isProfileCompleted: {
+			type: Boolean,
+			default: false,
+		},
 	},
+
 	{ timestamps: true }
 );
 

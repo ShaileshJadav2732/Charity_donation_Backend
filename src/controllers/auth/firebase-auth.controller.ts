@@ -5,7 +5,7 @@ import User from "../../models/user.model";
 import Donor from "../../models/donor.model";
 import Organization from "../../models/organization.model";
 
-// Helper function to get Firebase error messages
+// Helper functio n to get Firebase error messages
 export const getFirebaseErrorMessage = (code: string): string => {
 	const errorMap: Record<string, string> = {
 		"auth/email-already-exists": "The email address is already in use.",
@@ -60,7 +60,6 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 
 			// Create user document
 			user = await User.create({
-				username: finalUsername,
 				email: email || "",
 				firebaseUid: uid,
 				role: role,
@@ -78,7 +77,7 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 			} else if (role === "organization") {
 				await Organization.create({
 					user: user._id,
-					orgName: user.displayName || user.username,
+					orgName: user.displayName,
 					isProfileCompleted: false,
 				});
 			}
@@ -101,7 +100,7 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 			token,
 			user: {
 				id: user._id,
-				username: user.username,
+
 				email: user.email,
 				role: user.role,
 				displayName: user.displayName,
@@ -225,3 +224,47 @@ async function checkUserRole(
 		res.status(500).json({ message: "Server error during role validation" });
 	}
 }
+
+// Get profile status
+export const getProfileStatus = async (
+	req: AuthenticatedRequest,
+	res: Response
+) => {
+	try {
+		if (!req.user || !req.user.dbUser) {
+			return res.status(401).json({ message: "User not authenticated" });
+		}
+
+		const { role, _id } = req.user.dbUser;
+
+		if (role === "donor") {
+			const donor = await Donor.findOne({ user: _id });
+			return res.status(200).json({
+				role: "donor",
+				isProfileComplete: donor ? donor.isProfileCompleted : false,
+			});
+		} else if (role === "organization") {
+			const organization = await Organization.findOne({ user: _id });
+			return res.status(200).json({
+				role: "organization",
+				isProfileComplete: organization
+					? organization.isProfileCompleted
+					: false,
+			});
+		} else if (role === "admin") {
+			// Admins don't need to complete profiles
+			return res.status(200).json({
+				role: "admin",
+				isProfileComplete: true,
+			});
+		}
+
+		return res.status(400).json({
+			message: "Invalid user role",
+			isProfileComplete: false,
+		});
+	} catch (error) {
+		console.error("Profile status error:", error);
+		res.status(500).json({ message: "Failed to get profile status" });
+	}
+};
