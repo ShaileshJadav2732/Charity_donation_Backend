@@ -113,6 +113,7 @@ export const completeDonorProfile = async (req: AuthRequest, res: Response) => {
 		return res.status(200).json({
 			message: "Donor profile completed successfully",
 			donor,
+			isProfileCompleted: true,
 		});
 	} catch (error) {
 		console.error("Complete donor profile error:", error);

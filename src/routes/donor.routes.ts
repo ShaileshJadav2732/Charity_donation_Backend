@@ -8,6 +8,8 @@ import {
 	validateFirebaseToken,
 	requireRole,
 } from "../controllers/auth/firebase-auth.controller";
+import { authorize } from "../middleware/auth.middleware";
+import { requireCompletedProfileAccess } from "../middleware/profile-complete.middleware";
 
 const router = express.Router();
 
@@ -15,10 +17,21 @@ const router = express.Router();
 router.use(validateFirebaseToken);
 
 // Get donor profile - donor only
-router.get("/profile", requireRole("donor"), getDonorProfile);
+router.get(
+	"/profile",
+	authorize,
+	requireRole("donor"),
+	requireCompletedProfileAccess,
+	getDonorProfile
+);
 
 // Complete donor profile - donor only
-router.post("/complete-profile", requireRole("donor"), completeDonorProfile);
+router.post(
+	"/complete-profile",
+	authorize,
+	requireRole("donor"),
+	completeDonorProfile
+);
 
 // Update donor profile - donor only
 router.put("/update-profile", requireRole("donor"), updateDonorProfile);

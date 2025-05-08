@@ -60,6 +60,7 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 				displayName: name || userData?.displayName || finalUsername,
 				photoURL: picture || userData?.photoURL || "",
 				emailVerified: email_verified || userData?.emailVerified || false,
+				isProfileCompleted: false,
 			});
 
 			if (role === "donor") {
@@ -73,7 +74,19 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 			}
 		}
 
-		// Return only Firebase user info
+		// Get the profile completion status first
+		let isProfileCompleted = false;
+		if (role === "donor" || user.role === "donor") {
+			const donor = await Donor.findOne({ user: user._id });
+			isProfileCompleted = donor?.isProfileCompleted || false;
+		} else if (role === "organization" || user.role === "organization") {
+			const org = await Organization.findOne({ user: user._id });
+			isProfileCompleted = org?.isProfileCompleted || false;
+		} else if (user.role === "admin") {
+			isProfileCompleted = true;
+		}
+
+		// Then include it in the response
 		res.status(200).json({
 			message: isNewUser ? "Registration successful" : "Login successful",
 			user: {
@@ -83,6 +96,7 @@ export const firebaseAuth = async (req: Request, res: Response) => {
 				displayName: user.displayName,
 				photoURL: user.photoURL,
 				isNewUser,
+				isProfileCompleted, // Add this field
 			},
 			idToken,
 		});
