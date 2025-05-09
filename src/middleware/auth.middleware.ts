@@ -1,77 +1,64 @@
-import { Request, Response, NextFunction } from "express";
-import admin from "../config/firebase";
-import User from "../models/user.model";
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import admin from '../config/firebase.config';
+import User from '../models/user.model';
+import { AuthRequest } from '../types';
 
-export interface AuthRequest extends Request {
-	user: {
-		_id: string;
-		email: string;
-		role: string;
-		displayName?: string;
-		photoURL?: string;
-	};
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
-// Authentication middleware
-export const auth = async (req: Request, res: Response, next: NextFunction) => {
-	try {
-		// Get token from header
-		const token = req.headers.authorization?.split("Bearer ")[1];
-
-		if (!token) {
-			return res
-				.status(401)
-				.json({ message: "No token, authorization denied" });
-		}
-
-		// Verify token
-		const decodedToken = await admin.auth().verifyIdToken(token);
-		const { uid, email } = decodedToken;
-
-		if (!email) {
-			return res.status(401).json({ message: "Invalid token" });
-		}
-
-		// Get user from database
-		const user = await User.findOne({ firebaseUid: uid });
-
-		if (!user) {
-			return res.status(401).json({ message: "User not found" });
-		}
-
-		// Set user in request
-		(req as AuthRequest).user = {
-			_id: user._id.toString(),
-			email: user.email,
-			role: user.role,
-			displayName: user.displayName,
-			photoURL: user.photoURL,
-		};
-
-		next();
-	} catch (error) {
-		console.error("Auth middleware error:", error);
-		return res.status(401).json({ message: "Token is not valid" });
-	}
+// Middleware to verify JWT token
+export const verifyToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string; role: string };
+    
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      role: decoded.role
+    };
+    
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
 };
 
-// Authorization middleware
-export const authorize = (roles: string | string[]) => {
-	return (req: Request, res: Response, next: NextFunction) => {
-		const authReq = req as AuthRequest;
-
-		if (!authReq.user) {
-			return res.status(401).json({ message: "Not authenticated" });
-		}
-
-		const rolesArray = typeof roles === "string" ? [roles] : roles;
-
-		if (rolesArray.includes(authReq.user.role)) {
-			next();
-		} else {
-			return res.status(403).json({
-				message: "Not authorized to access this resource",
-			});
-		}
-	};
+// Middleware to verify Firebase token
+export const verifyFirebaseToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Find user in database
+    const user = await User.findOne({ firebaseUid: decodedToken.uid });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    req.user = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role
+    };
+    
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
 };

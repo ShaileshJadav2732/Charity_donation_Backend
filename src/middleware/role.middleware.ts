@@ -1,0 +1,58 @@
+import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../types';
+
+// Middleware to check if user has required role
+export const checkRole = (roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const hasRole = roles.includes(req.user.role);
+    
+    if (!hasRole) {
+      return res.status(403).json({ message: 'Access denied. You do not have the required role.' });
+    }
+    
+    next();
+  };
+};
+
+// Middleware specifically for donor role
+export const isDonor = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (req.user.role !== 'donor') {
+    return res.status(403).json({ message: 'Access denied. Donor role required.' });
+  }
+  
+  next();
+};
+
+// Middleware specifically for organization role
+export const isOrganization = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (req.user.role !== 'organization') {
+    return res.status(403).json({ message: 'Access denied. Organization role required.' });
+  }
+  
+  next();
+};
+
+// Middleware specifically for admin role
+export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access denied. Admin role required.' });
+  }
+  
+  next();
+};

@@ -1,17 +1,13 @@
-import express from "express";
-import {
-	firebaseLogin,
-	firebaseSignup,
-	getProfileStatus,
-	validateFirebaseToken,
-} from "../controllers/auth/firebase-auth.controller";
+import { Router } from 'express';
+import * as authController from '../controllers/auth.controller';
+import { verifyToken } from '../middleware/auth.middleware';
 
-const router = express.Router();
+const router = Router();
 
-// Firebase authentication routes
-router.post("/firebase/login", firebaseLogin);
-router.post("/firebase/signup", firebaseSignup);
-
-// Profile status route - requires token validation
+// Auth routes
+router.post('/register', authController.register);
+router.post('/login', authController.login);
+router.post('/verify-token', authController.verifyFirebaseToken);
+router.get('/me', verifyToken, authController.getCurrentUser);
 
 export default router;
