@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import connectDB from "./config/db.config";
 import authRoutes from "./routes/auth.routes";
 import profileRoutes from "./routes/profile.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 
 // Load environment variables
 dotenv.config();
@@ -24,6 +25,7 @@ app.use(morgan("dev"));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
