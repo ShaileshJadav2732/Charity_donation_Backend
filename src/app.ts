@@ -31,7 +31,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
 app.use("/api/campaigns", campaignRoutes);
 
-// Health check route
+// Health chec  k route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
 });
