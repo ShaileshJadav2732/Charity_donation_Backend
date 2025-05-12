@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes";
 import profileRoutes from "./routes/profile.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import causeRoutes from "./routes/cause.routes";
+import campaignRoutes from "./routes/campaign.routes";
 
 // Load environment variables
 dotenv.config();
@@ -28,10 +29,20 @@ app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
+app.use("/api/campaigns", campaignRoutes);
 
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
+});
+
+// Error handling middleware
+app.use((err: any, req: Request, res: Response, next: Function) => {
+	console.error(err.stack);
+	res.status(err.status || 500).json({
+		status: "error",
+		message: err.message || "Internal server error",
+	});
 });
 
 // Test route for debugging
