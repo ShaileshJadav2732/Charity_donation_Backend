@@ -2,15 +2,17 @@ import { Request } from "express";
 import { Document } from "mongoose";
 
 export interface IUser extends Document {
-	_id: string;
-	name: string;
-	email: string;
-	password: string;
-	role: "user" | "organization" | "admin";
-	phone?: string;
-	address?: string;
-	createdAt: Date;
-	updatedAt: Date;
+  _id: string;
+  name: string;
+  email: string;
+  password: string;
+  firebaseUid: string;
+  profileCompleted: boolean;
+  role: "user" | "organization" | "admin";
+  phone?: string;
+  address?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface IDonorProfile {

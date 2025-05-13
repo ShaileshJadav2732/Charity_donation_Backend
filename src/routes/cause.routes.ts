@@ -9,7 +9,7 @@ import {
 	getDonorCauses,
 } from "../controllers/cause.controller";
 import { authenticate } from "../middleware/auth.middleware";
-import { authorize } from "../middleware/role.middleware";
+import { authorize, isOrganization } from "../middleware/role.middleware";
 
 const router = express.Router();
 
@@ -18,12 +18,12 @@ router.get("/", getCauses);
 router.get("/:causeId", getCauseDetails);
 
 // Protected routes - Organization only
-router.post("/", authenticate, authorize(["organization"]), createCause);
-router.put("/:causeId", authenticate, authorize(["organization"]), updateCause);
+router.post("/", authenticate, isOrganization, createCause);
+router.put("/:causeId", authenticate, isOrganization, updateCause);
 router.delete(
 	"/:causeId",
 	authenticate,
-	authorize(["organization"]),
+	isOrganization,
 	deleteCause
 );
 
@@ -31,6 +31,6 @@ router.delete(
 router.get("/organization/:organizationId", getOrganizationCauses);
 
 // Donor routes
-router.get("/donor/supported", getDonorCauses);
+router.get("/donor/supported", authenticate, getDonorCauses);
 
 export default router;

@@ -1,199 +1,114 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import admin from "../config/firebase.config";
 import User from "../models/user.model";
 import { AuthRequest } from "../types";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "7d";
 
-// Register a new user
-export const register = async (req: Request, res: Response) => {
-	try {
-		console.log("Register request body:", req.body);
-		const { email, firebaseUid, role } = req.body;
+import asyncHandler from "express-async-handler";
 
-		// Validate input
-		if (!email || !firebaseUid || !role) {
-			console.log("Missing required fields:", { email, firebaseUid, role });
-			return res
-				.status(400)
-				.json({ message: "Email, firebaseUid, and role are required" });
-		}
-
-		// Check if user already exists by email
-		const existingUserByEmail = await User.findOne({ email });
-		if (existingUserByEmail) {
-			console.log("User already exists with email:", email);
-			return res
-				.status(400)
-				.json({ message: "User already exists with this email" });
-		}
-
-		// Check if user already exists by firebaseUid
-		const existingUserByUid = await User.findOne({ firebaseUid });
-		if (existingUserByUid) {
-			console.log("User already exists with firebaseUid:", firebaseUid);
-			return res
-				.status(400)
-				.json({ message: "User already exists with this Firebase ID" });
-		}
-
-		// Create new user
-		const newUser = new User({
-			email,
-			firebaseUid,
-			role,
-			profileCompleted: false,
-		});
-
-		console.log("Creating new user:", newUser);
-		await newUser.save();
-		console.log("User saved successfully with ID:", newUser._id);
-
-		// Generate JWT token
-		const token = jwt.sign(
-			{ id: newUser._id, email: newUser.email, role: newUser.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
-		);
-
-		return res.status(201).json({
-			message: "User registered successfully",
-			user: {
-				id: newUser._id,
-				email: newUser.email,
-				role: newUser.role,
-				profileCompleted: newUser.profileCompleted,
-			},
-			token,
-		});
-	} catch (error) {
-		console.error("Registration error:", error);
-		return res
-			.status(500)
-			.json({ message: "Server error during registration" });
-	}
+const generateToken = (email: string) => {
+  return jwt.sign({ email }, process.env.JWT_SECRET as string, {
+    expiresIn: "7d",
+  });
 };
 
-// Login user
-export const login = async (req: Request, res: Response) => {
-	try {
-		console.log("Login request body:", req.body);
-		const { firebaseUid } = req.body;
+export const register = asyncHandler(async (req: Request, res: Response) => {
+  const { email, name, firebaseUid } = req.body;
 
-		if (!firebaseUid) {
-			console.log("Missing firebaseUid in login request");
-			return res.status(400).json({ message: "Firebase UID is required" });
-		}
+  // Check if user already exists
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    res.status(400);
+    throw new Error("User already exists");
+  }
 
-		// Find user by Firebase UID
-		console.log("Looking for user with firebaseUid:", firebaseUid);
-		const user = await User.findOne({ firebaseUid });
+  // Create new user without password (since auth is handled by Firebase)
+  const user = await User.create({
+    email,
+    name,
+    firebaseUid,
+    password: undefined, // No password stored in MongoDB
+  });
 
-		if (!user) {
-			console.log("User not found with firebaseUid:", firebaseUid);
-			return res.status(404).json({ message: "User not found" });
-		}
+  // Generate JWT token for your backend API
+  const token = generateToken(user.email);
 
-		console.log("User found:", user);
+  console.log("tokenn", token);
 
-		// Generate JWT token
-		const token = jwt.sign(
-			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
-		);
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "none",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
 
-		return res.status(200).json({
-			message: "Login successful",
-			user: {
-				id: user._id,
-				email: user.email,
-				role: user.role,
-				profileCompleted: user.profileCompleted,
-			},
-			token,
-		});
-	} catch (error) {
-		console.error("Login error:", error);
-		return res.status(500).json({ message: "Server error during login" });
-	}
-};
+  res.status(201).json({
+    message: "User registered successfully",
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      firebaseUid: user.firebaseUid,
+    },
+  });
+});
 
-// Verify Firebase token and return user data
-export const verifyFirebaseToken = async (req: Request, res: Response) => {
-	try {
-		console.log("Verify token request body:", req.body);
-		const { idToken } = req.body;
+export const checkUserExists = asyncHandler(async (req, res) => {
+  const { email } = req.query;
 
-		if (!idToken) {
-			console.log("Missing idToken in verify request");
-			return res.status(400).json({ message: "ID token is required" });
-		}
+  if (!email) {
+    res.status(400).json({ message: "Email is required" });
+    return;
+  }
 
-		// Verify the Firebase token
-		console.log("Verifying Firebase token...");
-		const decodedToken = await admin.auth().verifyIdToken(idToken);
-		console.log("Token verified, decoded token:", decodedToken);
+  const user = await User.findOne({ email });
 
-		// Find user by Firebase UID
-		console.log("Looking for user with firebaseUid:", decodedToken.uid);
-		const user = await User.findOne({ firebaseUid: decodedToken.uid });
+  if (!user) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
 
-		if (!user) {
-			console.log("User not found with firebaseUid:", decodedToken.uid);
-			return res.status(404).json({ message: "User not found in database" });
-		}
+  res.status(200).json({ exists: true, user });
+});
 
-		console.log("User found:", user);
-
-		// Generate JWT token
-		const token = jwt.sign(
-			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
-		);
-
-		return res.status(200).json({
-			message: "Token verified successfully",
-			user: {
-				id: user._id,
-				email: user.email,
-				role: user.role,
-				profileCompleted: user.profileCompleted,
-			},
-			token,
-		});
-	} catch (error) {
-		console.error("Token verification error:", error);
-		return res.status(401).json({ message: "Invalid or expired token" });
-	}
+export const logout = (req: Request, res: Response): void => {
+  res
+    .cookie("token", "", {
+      httpOnly: true,
+      expires: new Date(0),
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    })
+    .status(200)
+    .json({ message: "Logged out successfully" });
 };
 
 // Get current user profile
 export const getCurrentUser = async (req: AuthRequest, res: Response) => {
-	try {
-		if (!req.user) {
-			return res.status(401).json({ message: "Unauthorized" });
-		}
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-		const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id);
 
-		if (!user) {
-			return res.status(404).json({ message: "User not found" });
-		}
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
-		return res.status(200).json({
-			user: {
-				id: user._id,
-				email: user.email,
-				role: user.role,
-				profileCompleted: user.profileCompleted,
-			},
-		});
-	} catch (error) {
-		console.error("Get current user error:", error);
-		return res.status(500).json({ message: "Server error" });
-	}
+    return res.status(200).json({
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        profileCompleted: user.profileCompleted,
+      },
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };

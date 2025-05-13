@@ -1,6 +1,6 @@
 // backend/controllers/campaign.controller.ts
 import { Request, Response } from "express";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import Campaign, { ICampaign } from "../models/campaign.model";
 import Cause from "../models/cause.model";
 import OrganizationProfile from "../models/organization.model";
@@ -95,91 +95,92 @@ export const getCampaignById = catchAsync(
 );
 
 // Create a new campaign
-export const createCampaign = catchAsync(
-	async (req: AuthRequest, res: Response) => {
-		if (!req.user || req.user.role !== "organization") {
-			throw new AppError(
-				"Unauthorized: Only organizations can create campaigns",
-				403
-			);
-		}
-
-		const {
-			title,
-			description,
-			causes,
-			acceptedDonationTypes,
-			startDate,
-			endDate,
-		} = req.body;
-
-		// Validate required fields
-		if (
-			!title ||
-			!description ||
-			!causes?.length ||
-			!acceptedDonationTypes?.length ||
-			!startDate ||
-			!endDate
-		) {
-			throw new AppError("Missing required fields", 400);
-		}
-
-		// Validate causes exist and belong to the organization
-		const validCauses = await Cause.find({
-			_id: { $in: causes },
-			organizationId: req.user._id,
-		});
-
-		if (validCauses.length !== causes.length) {
-			throw new AppError("Invalid or unauthorized cause IDs", 400);
-		}
-
-		// Validate dates
-		const start = new Date(startDate);
-		const end = new Date(endDate);
-		if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-			throw new AppError("Invalid date format", 400);
-		}
-		if (start >= end) {
-			throw new AppError("End date must be after start date", 400);
-		}
-
-		const campaign = await Campaign.create({
-			title,
-			description,
-			causes,
-			acceptedDonationTypes,
-			startDate: start,
-			endDate: end,
-			organizationId: req.user._id,
-		});
-
-		await campaign.populate({
-			path: "causes",
-			populate: { path: "organizationId", select: "name" },
-		});
-
-		res.status(201).json({
-			campaign: {
-				id: campaign._id.toString(),
-				title: campaign.title,
-				description: campaign.description,
-				causes: campaign.causes.map((cause: any) => ({
-					id: cause._id.toString(),
-					title: cause.title,
-					organizationName: cause.organizationId?.name,
-				})),
-				acceptedDonationTypes: campaign.acceptedDonationTypes,
-				startDate: campaign.startDate.toISOString(),
-				endDate: campaign.endDate.toISOString(),
-				organizationId: campaign.organizations[0]?.toString(),
-				createdAt: campaign.createdAt.toISOString(),
-				updatedAt: campaign.updatedAt.toISOString(),
-			},
-		});
+export const createCampaign = catchAsync(async (req: AuthRequest, res: Response) => {
+	if (!req.user || req.user.role !== "organization") {
+		throw new AppError("Unauthorized: Only organizations can create campaigns", 403);
 	}
-);
+
+	const {
+		title,
+		description,
+		causes,
+		acceptedDonationTypes,
+		startDate,
+		endDate,
+		imageUrl,
+		tags,
+		status,
+		targetAmount,
+		targetQuantity,
+		donationType,
+		location,
+		requirements,
+		impact,
+	} = req.body;
+
+	// Validate required fields
+	if (!title || !description || !causes?.length || !acceptedDonationTypes?.length || !startDate || !endDate || !imageUrl || !status) {
+		throw new AppError("Missing required fields", 400);
+	}
+
+	// Convert cause IDs to ObjectIds
+	const causeIds = causes.map((id: string) => new Types.ObjectId(id));
+
+	// Validate causes exist and belong to the organization
+	const validCauses = await Cause.find({
+		_id: { $in: causeIds },
+		organizationId: new Types.ObjectId(req.user._id)
+	});
+
+	if (validCauses.length !== causes.length) {
+		throw new AppError("Invalid or unauthorized cause IDs", 400);
+	}
+
+	// Validate dates
+	const start = new Date(startDate);
+	const end = new Date(endDate);
+	if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+		throw new AppError("Invalid date format", 400);
+	}
+	if (start >= end) {
+		throw new AppError("End date must be after start date", 400);
+	}
+
+	// Validate donation types
+	const validDonationTypes = Object.values(DonationType);
+	const invalidTypes = acceptedDonationTypes.filter((type: string) => !validDonationTypes.includes(type as DonationType));
+	if (invalidTypes.length > 0) {
+		throw new AppError(`Invalid donation types: ${invalidTypes.join(", ")}`, 400);
+	}
+
+	// Calculate total target amount from causes
+	const totalTargetAmount = validCauses.reduce((sum, cause) => sum + cause.targetAmount, 0);
+
+	// Create campaign
+	const campaign = await Campaign.create({
+		title,
+		description,
+		causes: causeIds,
+		organizations: [new Types.ObjectId(req.user._id)], // Add creating organization
+		acceptedDonationTypes: acceptedDonationTypes as DonationType[],
+		startDate: start,
+		endDate: end,
+		imageUrl,
+		tags: tags || [],
+		totalTargetAmount,
+		totalRaisedAmount: 0,
+		totalSupporters: 0,
+		status: status,
+	});
+
+	res.status(201).json({
+		success: true,
+		data: {
+			campaign: campaign,
+		},
+		message: "Campaign created successfully"
+	});
+});
 
 // Update an existing campaign
 export const updateCampaign = catchAsync(

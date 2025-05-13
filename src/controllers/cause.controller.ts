@@ -298,65 +298,57 @@ export const getDonorCauses = catchAsync(
 // Get cause details with campaign and donation statistics
 export const getCauseDetails = catchAsync(
 	async (req: Request, res: Response) => {
-		try {
-			const { causeId } = req.params;
+		const { causeId } = req.params;
 
-			if (!validateObjectId(causeId)) {
-				return res.status(400).json({ message: "Invalid cause ID" });
-			}
-
-			const cause = await Cause.findById(causeId).populate(
-				"organizationId",
-				"name email phone address"
-			);
-
-			if (!cause) {
-				return res.status(404).json({ message: "Cause not found" });
-			}
-
-			// Get associated campaigns
-			const campaigns = await Campaign.find({ causes: causeId })
-				.select("title description status totalTargetAmount totalRaisedAmount")
-				.populate("organizations", "name");
-
-			// Get donation statistics
-			const donationStats = await Donation.aggregate([
-				{
-					$match: {
-						cause: cause._id,
-						status: { $ne: "CANCELLED" },
-					},
-				},
-				{
-					$group: {
-						_id: "$type",
-						totalAmount: { $sum: "$amount" },
-						count: { $sum: 1 },
-					},
-				},
-			]);
-
-			// Calculate progress
-			const progress = {
-				percentage: (cause.raisedAmount / cause.targetAmount) * 100,
-				remaining: cause.targetAmount - cause.raisedAmount,
-			};
-
-			res.status(200).json({
-				success: true,
-				data: {
-					cause,
-					campaigns,
-					donationStats,
-					progress,
-				},
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				success: false,
-				message: "Error fetching cause details",
-				error: error?.message || "Unknown error occurred",
-			});
+		if (!validateObjectId(causeId)) {
+			throw new AppError("Invalid cause ID", 400);
 		}
+
+		const cause = await Cause.findById(causeId).populate(
+			"organizationId",
+			"name email phone address"
+		);
+
+		if (!cause) {
+			throw new AppError("Cause not found", 404);
+		}
+
+		// Get associated campaigns
+		const campaigns = await Campaign.find({ causes: causeId })
+			.select("title description status totalTargetAmount totalRaisedAmount")
+			.populate("organizations", "name");
+
+		// Get donation statistics
+		const donationStats = await Donation.aggregate([
+			{
+				$match: {
+					cause: cause._id,
+					status: { $ne: "CANCELLED" },
+				},
+			},
+			{
+				$group: {
+					_id: "$type",
+					totalAmount: { $sum: "$amount" },
+					count: { $sum: 1 },
+				},
+			},
+		]);
+
+		// Calculate progress
+		const progress = {
+			percentage: (cause.raisedAmount / cause.targetAmount) * 100,
+			remaining: cause.targetAmount - cause.raisedAmount,
+		};
+
+		res.status(200).json({
+			success: true,
+			data: {
+				cause: formatCauseResponse(cause),
+				campaigns,
+				donationStats,
+				progress,
+			},
+		});
 	}
 );
