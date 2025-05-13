@@ -2,38 +2,35 @@ import express from "express";
 import {
 	createDonation,
 	getDonations,
-	getDonationById,
+	getDonation,
+	updateDonation,
+	deleteDonation,
+	getOrganizationDonations,
+	getUserDonations,
 	updateDonationStatus,
-	cancelDonation,
 } from "../controllers/donation.controller";
-import { authenticate } from "../middleware/auth.middleware";
-import { authorize } from "../middleware/role.middleware";
+import { protect, authorize } from "../middleware/auth";
+import { upload, handleMulterError } from "../middleware/upload";
+import { UserRole } from "../types/enums";
 
 const router = express.Router();
 
-// Create donation
-router.post("/", authenticate, createDonation);
+// Public routes
+router.get("/", getDonations);
+router.get("/:id", getDonation);
 
-// Get all donations (with filters)
-router.get("/", authenticate, getDonations);
+// Protected routes
+router.use(protect);
 
-// Get single donation
-router.get("/:id", authenticate, getDonationById);
+// User routes
+router.get("/user/me", getUserDonations);
 
-// Update donation status (organization only)
-router.patch(
-	"/:id/status",
-	authenticate,
-	authorize(["organization"]),
-	updateDonationStatus
-);
-
-// Cancel donation (donor or organization)
-router.patch(
-	"/:id/cancel",
-	authenticate,
-	authorize(["donor", "organization"]),
-	cancelDonation
-);
+// Organization routes
+router.use(authorize(UserRole.ORGANIZATION, UserRole.ADMIN));
+router.get("/organization/me", getOrganizationDonations);
+router.post("/", upload.single("image"), handleMulterError, createDonation);
+router.put("/:id", upload.single("image"), handleMulterError, updateDonation);
+router.delete("/:id", deleteDonation);
+router.patch("/:id/status", updateDonationStatus);
 
 export default router;

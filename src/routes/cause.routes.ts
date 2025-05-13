@@ -1,32 +1,36 @@
 import express from "express";
+import { protect, authorize, verifyOrganization } from "../middleware/auth";
+import { upload, handleMulterError } from "../middleware/upload";
+import { UserRole } from "../types/enums";
 import {
-   getCauses,
-   getCauseById,
    createCause,
+   getCauses,
+   getCauseById as getCause,
    updateCause,
    deleteCause,
-   getOrganizationCauses,
-   getDonorCauses,
+   getOrganizationCauses
 } from "../controllers/cause.controller";
-import { authenticate } from "../middleware/auth.middleware";
-import { isOrganization, isDonor } from "../middleware/role.middleware";
 
 const router = express.Router();
 
 // Public routes
 router.get("/", getCauses);
-router.get("/:id", getCauseById);
+router.get("/:id", getCause);
 
 // Protected routes
-router.use(authenticate);
+router.use(protect);
 
 // Organization routes
-router.post("/", isOrganization, createCause);
-router.patch("/:id", isOrganization, updateCause);
-router.delete("/:id", isOrganization, deleteCause);
-router.get("/organization/:organizationId", getOrganizationCauses);
+router.use(authorize(UserRole.ORGANIZATION, UserRole.ADMIN));
+router.use(verifyOrganization);
 
-// Donor routes
-router.get("/donor/supported", isDonor, getDonorCauses);
+// Cause management routes
+router.route("/")
+   .get(getOrganizationCauses)
+   .post(upload.single("image"), handleMulterError, createCause);
+
+router.route("/:id")
+   .put(upload.single("image"), handleMulterError, updateCause)
+   .delete(deleteCause);
 
 export default router; 

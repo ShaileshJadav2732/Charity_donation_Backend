@@ -1,13 +1,20 @@
 import { Request } from "express";
+import { IUser } from "../models/user.model";
+
+export interface AuthRequest extends Request {
+	user?: IUser & { id: string };
+	file?: Express.Multer.File;
+}
 
 export interface IUser {
-	_id?: string;
+	_id: string;
+	name: string;
 	email: string;
-	firebaseUid: string;
-	role: "donor" | "organization" | "admin";
-	profileCompleted: boolean;
-	createdAt?: Date;
-	updatedAt?: Date;
+	password: string;
+	role: "DONOR" | "ORGANIZATION" | "ADMIN";
+	organization?: string;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 export interface IDonorProfile {
@@ -41,12 +48,4 @@ export interface IOrganizationProfile {
 	verified: boolean;
 	createdAt?: Date;
 	updatedAt?: Date;
-}
-
-export interface AuthRequest extends Request {
-	user?: {
-		id: string;
-		email: string;
-		role: string;
-	};
 }

@@ -24,10 +24,74 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
 			contactPhone,
 			contactEmail,
 			notes,
+			// Type-specific fields
+			bloodType,
+			lastDonationDate,
+			healthConditions,
+			clothesType,
+			condition,
+			size,
+			foodType,
+			expiryDate,
+			storageInstructions,
+			dimensions,
+			weight,
 		} = req.body;
 
+		// Validate required fields based on donation type
+		if (!organization || !type || !description || !contactPhone || !contactEmail) {
+			return res.status(400).json({
+				success: false,
+				error: "Missing required fields",
+			});
+		}
+
+		// Validate type-specific required fields
+		switch (type) {
+			case DonationType.MONEY:
+				if (!amount) {
+					return res.status(400).json({
+						success: false,
+						error: "Amount is required for monetary donations",
+					});
+				}
+				break;
+			case DonationType.BLOOD:
+				if (!bloodType || !quantity || !unit) {
+					return res.status(400).json({
+						success: false,
+						error: "Blood type, quantity, and unit are required for blood donations",
+					});
+				}
+				break;
+			case DonationType.CLOTHES:
+				if (!clothesType || !quantity || !unit || !condition) {
+					return res.status(400).json({
+						success: false,
+						error: "Clothes type, quantity, unit, and condition are required for clothes donations",
+					});
+				}
+				break;
+			case DonationType.FOOD:
+				if (!foodType || !quantity || !unit) {
+					return res.status(400).json({
+						success: false,
+						error: "Food type, quantity, and unit are required for food donations",
+					});
+				}
+				break;
+			default:
+				if (!quantity || !unit) {
+					return res.status(400).json({
+						success: false,
+						error: "Quantity and unit are required for non-monetary donations",
+					});
+				}
+		}
+
+		// Create donation object with all fields
 		const donation = new Donation({
-			donor: req.user?.id, // From auth middleware
+			donor: req.user?.id,
 			organization,
 			type,
 			amount,
@@ -42,6 +106,18 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
 			contactPhone,
 			contactEmail,
 			notes,
+			// Type-specific fields
+			bloodType,
+			lastDonationDate,
+			healthConditions,
+			clothesType,
+			condition,
+			size,
+			foodType,
+			expiryDate,
+			storageInstructions,
+			dimensions,
+			weight,
 		});
 
 		await donation.save();
@@ -58,9 +134,10 @@ export const createDonation = async (req: AuthRequest, res: Response) => {
 			data: donation,
 		});
 	} catch (error) {
+		console.error("Donation creation error:", error);
 		res.status(400).json({
 			success: false,
-			error: error instanceof Error ? error.message : "An error occurred",
+			error: error instanceof Error ? error.message : "An error occurred while creating the donation",
 		});
 	}
 };

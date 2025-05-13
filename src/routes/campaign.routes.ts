@@ -1,36 +1,40 @@
-import express, { Router } from "express";
+import express from "express";
+import { protect, authorize, verifyOrganization } from "../middleware/auth";
+import { upload, handleMulterError } from "../middleware/upload";
+import { UserRole } from "../types/enums";
 import {
-   getCampaigns,
-   getCampaignById,
    createCampaign,
+   getCampaigns,
+   getCampaignById as getCampaign,
    updateCampaign,
    deleteCampaign,
-   addCauseToCampaign,
-   removeCauseFromCampaign,
-   addOrganizationToCampaign,
-   removeOrganizationFromCampaign,
+   getCampaignUpdates,
+   createCampaignUpdate as addCampaignUpdate,
 } from "../controllers/campaign.controller";
-import { authenticate } from "../middleware/auth.middleware";
-import { isOrganization } from "../middleware/role.middleware";
 
-const router: Router = express.Router();
+const router = express.Router();
 
 // Public routes
 router.get("/", getCampaigns);
-router.get("/:id", getCampaignById);
+router.get("/:id", getCampaign);
+router.get("/:id/updates", getCampaignUpdates);
 
-// Protected routes (require authentication)
-router.use(authenticate);
+// Protected routes
+router.use(protect);
 
-// Organization-only routes
-router.post("/", isOrganization, createCampaign);
-router.patch("/:id", isOrganization, updateCampaign);
-router.delete("/:id", isOrganization, deleteCampaign);
+// Organization routes
+router.use(authorize(UserRole.ORGANIZATION, UserRole.ADMIN));
+router.use(verifyOrganization);
 
 // Campaign management routes
-router.post("/:id/causes", isOrganization, addCauseToCampaign);
-router.delete("/:id/causes/:causeId", isOrganization, removeCauseFromCampaign);
-router.post("/:id/organizations", isOrganization, addOrganizationToCampaign);
-router.delete("/:id/organizations/:organizationId", isOrganization, removeOrganizationFromCampaign);
+router.route("/")
+   .post(upload.single("image"), handleMulterError, createCampaign);
+
+router.route("/:id")
+   .put(upload.single("image"), handleMulterError, updateCampaign)
+   .delete(deleteCampaign);
+
+router.route("/:id/updates")
+   .post(addCampaignUpdate);
 
 export default router; 
