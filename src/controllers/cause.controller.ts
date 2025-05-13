@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Cause from "../models/cause.model";
+import Cause, { ICause } from "../models/cause.model";
 import Donation from "../models/donation.model";
+import Campaign from "../models/campaign.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
+import { validateObjectId } from "../utils/validation";
 
 interface AuthRequest extends Request {
 	user?: IUser;
@@ -19,8 +21,11 @@ const formatCauseResponse = (cause: any) => ({
 	raisedAmount: cause.raisedAmount,
 	imageUrl: cause.imageUrl,
 	tags: cause.tags,
-	organizationId: cause.organizationId._id?.toString() || cause.organizationId,
-	organizationName: cause.organizationId?.name || undefined,
+	organizationId:
+		cause.organizationId?._id?.toString() ||
+		cause.organizationId?.toString() ||
+		"",
+	organizationName: cause.organizationId?.name || "",
 	createdAt: cause.createdAt.toISOString(),
 	updatedAt: cause.updatedAt.toISOString(),
 });
@@ -126,7 +131,7 @@ export const updateCause = catchAsync(
 			throw new AppError("Cause not found", 404);
 		}
 
-		// Check if user’s organization owns the cause
+		// Check if user's organization owns the cause
 		if (!cause.organizationId.equals(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to update this cause",
@@ -174,7 +179,7 @@ export const deleteCause = catchAsync(
 			throw new AppError("Cause not found", 404);
 		}
 
-		// Check if user’s organization owns the cause
+		// Check if user's organization owns the cause
 		if (!cause.organizationId.equals(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to delete this cause",
@@ -287,5 +292,71 @@ export const getDonorCauses = catchAsync(
 			page,
 			limit,
 		});
+	}
+);
+
+// Get cause details with campaign and donation statistics
+export const getCauseDetails = catchAsync(
+	async (req: Request, res: Response) => {
+		try {
+			const { causeId } = req.params;
+
+			if (!validateObjectId(causeId)) {
+				return res.status(400).json({ message: "Invalid cause ID" });
+			}
+
+			const cause = await Cause.findById(causeId).populate(
+				"organizationId",
+				"name email phone address"
+			);
+
+			if (!cause) {
+				return res.status(404).json({ message: "Cause not found" });
+			}
+
+			// Get associated campaigns
+			const campaigns = await Campaign.find({ causes: causeId })
+				.select("title description status totalTargetAmount totalRaisedAmount")
+				.populate("organizations", "name");
+
+			// Get donation statistics
+			const donationStats = await Donation.aggregate([
+				{
+					$match: {
+						cause: cause._id,
+						status: { $ne: "CANCELLED" },
+					},
+				},
+				{
+					$group: {
+						_id: "$type",
+						totalAmount: { $sum: "$amount" },
+						count: { $sum: 1 },
+					},
+				},
+			]);
+
+			// Calculate progress
+			const progress = {
+				percentage: (cause.raisedAmount / cause.targetAmount) * 100,
+				remaining: cause.targetAmount - cause.raisedAmount,
+			};
+
+			res.status(200).json({
+				success: true,
+				data: {
+					cause,
+					campaigns,
+					donationStats,
+					progress,
+				},
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				success: false,
+				message: "Error fetching cause details",
+				error: error?.message || "Unknown error occurred",
+			});
+		}
 	}
 );

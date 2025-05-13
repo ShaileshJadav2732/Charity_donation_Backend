@@ -1,13 +1,16 @@
 import { Request } from "express";
+import { Document } from "mongoose";
 
-export interface IUser {
-	_id?: string;
+export interface IUser extends Document {
+	_id: string;
+	name: string;
 	email: string;
-	firebaseUid: string;
-	role: "donor" | "organization" | "admin";
-	profileCompleted: boolean;
-	createdAt?: Date;
-	updatedAt?: Date;
+	password: string;
+	role: "user" | "organization" | "admin";
+	phone?: string;
+	address?: string;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 export interface IDonorProfile {
@@ -44,9 +47,5 @@ export interface IOrganizationProfile {
 }
 
 export interface AuthRequest extends Request {
-	user?: {
-		id: string;
-		email: string;
-		role: string;
-	};
+	user?: IUser;
 }

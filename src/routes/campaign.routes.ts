@@ -1,36 +1,30 @@
-import express, { Router } from "express";
+import express from "express";
 import {
-   getCampaigns,
-   getCampaignById,
-   createCampaign,
-   updateCampaign,
-   deleteCampaign,
-   addCauseToCampaign,
-   removeCauseFromCampaign,
-   addOrganizationToCampaign,
-   removeOrganizationFromCampaign,
+	createCampaign,
+	getCampaigns,
+	getCampaignDetails,
+	updateCampaign,
+	updateCampaignStatus,
 } from "../controllers/campaign.controller";
-import { authenticate } from "../middleware/auth.middleware";
-import { isOrganization } from "../middleware/role.middleware";
+import { authenticate } from "../middleware/auth";
+import { authorize } from "../middleware/role.middleware";
 
-const router: Router = express.Router();
+const router = express.Router();
 
 // Public routes
 router.get("/", getCampaigns);
-router.get("/:id", getCampaignById);
+router.get("/:campaignId", getCampaignDetails);
 
 // Protected routes (require authentication)
 router.use(authenticate);
 
 // Organization-only routes
-router.post("/", isOrganization, createCampaign);
-router.patch("/:id", isOrganization, updateCampaign);
-router.delete("/:id", isOrganization, deleteCampaign);
+router.post("/", authorize(["organization"]), createCampaign);
+router.patch("/:campaignId", authorize(["organization"]), updateCampaign);
+router.patch(
+	"/:campaignId/status",
+	authorize(["organization"]),
+	updateCampaignStatus
+);
 
-// Campaign management routes
-router.post("/:id/causes", isOrganization, addCauseToCampaign);
-router.delete("/:id/causes/:causeId", isOrganization, removeCauseFromCampaign);
-router.post("/:id/organizations", isOrganization, addOrganizationToCampaign);
-router.delete("/:id/organizations/:organizationId", isOrganization, removeOrganizationFromCampaign);
-
-export default router; 
+export default router;

@@ -2,40 +2,47 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import admin from "../config/firebase.config";
 import User from "../models/user.model";
-import { AuthRequest } from "../types";
+import { AuthRequest, IUser } from "../types";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
 
+declare global {
+	namespace Express {
+		interface Request {
+			user?: IUser;
+		}
+	}
+}
+
 // Middleware to verify JWT token
 export const authenticate = async (
-	req: AuthRequest,
+	req: Request,
 	res: Response,
 	next: NextFunction
 ) => {
 	try {
-		const authHeader = req.headers.authorization;
+		const token = req.headers.authorization?.split(" ")[1];
 
-		if (!authHeader || !authHeader.startsWith("Bearer ")) {
+		if (!token) {
 			return res.status(401).json({ message: "No token provided" });
 		}
 
-		const token = authHeader.split(" ")[1];
-
-		const decoded = jwt.verify(token, JWT_SECRET) as {
+		const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
 			id: string;
-			email: string;
-			role: string;
 		};
+		const user = await User.findById(decoded.id);
 
-		req.user = {
-			id: decoded.id,
-			email: decoded.email,
-			role: decoded.role,
-		};
+		if (!user) {
+			return res.status(401).json({ message: "User not found" });
+		}
 
+		req.user = user;
 		next();
-	} catch (error) {
-		return res.status(401).json({ message: "Invalid or expired token" });
+	} catch (error: any) {
+		res.status(401).json({
+			message: "Authentication failed",
+			error: error?.message || "Invalid token",
+		});
 	}
 };
 

@@ -1,19 +1,17 @@
-import { Response, NextFunction } from "express";
-import { AuthRequest } from "../types";
+import { Request, Response, NextFunction } from "express";
+import { AuthRequest } from "./auth.middleware";
 
 // Middleware to check if user has required role
 export const authorize = (roles: string[]) => {
-	return (req: AuthRequest, res: Response, next: NextFunction) => {
+	return (req: Request, res: Response, next: NextFunction) => {
 		if (!req.user) {
-			return res.status(401).json({ message: "Unauthorized" });
+			return res.status(401).json({ message: "Authentication required" });
 		}
 
-		const hasRole = roles.includes(req.user.role);
-
-		if (!hasRole) {
-			return res
-				.status(403)
-				.json({ message: "Access denied. You do not have the required role." });
+		if (!roles.includes(req.user.role)) {
+			return res.status(403).json({
+				message: "Not authorized to perform this action",
+			});
 		}
 
 		next();

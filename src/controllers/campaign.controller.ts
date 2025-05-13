@@ -1,13 +1,15 @@
 // backend/controllers/campaign.controller.ts
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Campaign from "../models/campaign.model";
+import Campaign, { ICampaign } from "../models/campaign.model";
 import Cause from "../models/cause.model";
 import OrganizationProfile from "../models/organization.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
 import { DonationType } from "../models/donation.model";
+import { validateObjectId } from "../utils/validation";
+import Donation from "../models/donation.model";
 
 interface AuthRequest extends Request {
 	user?: IUser;
@@ -195,7 +197,7 @@ export const updateCampaign = catchAsync(
 			throw new AppError("Campaign not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to update this campaign",
@@ -297,7 +299,7 @@ export const deleteCampaign = catchAsync(
 			throw new AppError("Campaign not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to delete this campaign",
@@ -338,7 +340,7 @@ export const addCauseToCampaign = catchAsync(
 			throw new AppError("Cause not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to modify this campaign",
@@ -346,7 +348,7 @@ export const addCauseToCampaign = catchAsync(
 			);
 		}
 
-		// Check if cause belongs to one of the campaign’s organizations
+		// Check if cause belongs to one of the campaign's organizations
 		if (!cause.organizationId.equals(req.user._id)) {
 			throw new AppError("Cause does not belong to your organization", 403);
 		}
@@ -383,7 +385,7 @@ export const removeCauseFromCampaign = catchAsync(
 			throw new AppError("Campaign not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to modify this campaign",
@@ -438,7 +440,7 @@ export const addOrganizationToCampaign = catchAsync(
 			throw new AppError("Organization not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to modify this campaign",
@@ -478,7 +480,7 @@ export const removeOrganizationFromCampaign = catchAsync(
 			throw new AppError("Campaign not found", 404);
 		}
 
-		// Check if user’s organization is associated with the campaign
+		// Check if user's organization is associated with the campaign
 		if (!campaign.organizations.includes(req.user._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to modify this campaign",
@@ -510,3 +512,265 @@ export const removeOrganizationFromCampaign = catchAsync(
 		});
 	}
 );
+
+// Get campaigns with search and filtering
+export const getCampaigns = async (req: Request, res: Response) => {
+	try {
+		const {
+			search,
+			status,
+			organization,
+			cause,
+			tag,
+			startDate,
+			endDate,
+			page = 1,
+			limit = 10,
+			sortBy = "createdAt",
+			sortOrder = "desc",
+		} = req.query;
+
+		const query: any = {};
+
+		// Search in title and description
+		if (search) {
+			query.$text = { $search: search as string };
+		}
+
+		// Filter by status
+		if (status) {
+			query.status = status;
+		}
+
+		// Filter by organization
+		if (organization) {
+			if (!validateObjectId(organization as string)) {
+				return res.status(400).json({ message: "Invalid organization ID" });
+			}
+			query.organizations = organization;
+		}
+
+		// Filter by cause
+		if (cause) {
+			if (!validateObjectId(cause as string)) {
+				return res.status(400).json({ message: "Invalid cause ID" });
+			}
+			query.causes = cause;
+		}
+
+		// Filter by tag
+		if (tag) {
+			query.tags = tag;
+		}
+
+		// Filter by date range
+		if (startDate || endDate) {
+			query.startDate = {};
+			if (startDate) query.startDate.$gte = new Date(startDate as string);
+			if (endDate) query.startDate.$lte = new Date(endDate as string);
+		}
+
+		const sort: any = {};
+		sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
+
+		const campaigns = await Campaign.find(query)
+			.populate("organizations", "name email phone")
+			.populate("causes", "title description")
+			.sort(sort)
+			.skip((Number(page) - 1) * Number(limit))
+			.limit(Number(limit));
+
+		const total = await Campaign.countDocuments(query);
+
+		res.status(200).json({
+			success: true,
+			data: campaigns,
+			pagination: {
+				total,
+				page: Number(page),
+				pages: Math.ceil(total / Number(limit)),
+			},
+		});
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Error fetching campaigns",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};
+
+// Get campaign details with donation statistics
+export const getCampaignDetails = async (req: Request, res: Response) => {
+	try {
+		const { campaignId } = req.params;
+
+		if (!validateObjectId(campaignId)) {
+			return res.status(400).json({ message: "Invalid campaign ID" });
+		}
+
+		const campaign = await Campaign.findById(campaignId)
+			.populate("organizations", "name email phone address")
+			.populate("causes", "title description targetAmount raisedAmount");
+
+		if (!campaign) {
+			return res.status(404).json({ message: "Campaign not found" });
+		}
+
+		// Get donation statistics
+		const donationStats = await Donation.aggregate([
+			{
+				$match: {
+					campaign: campaign._id,
+					status: { $ne: "CANCELLED" },
+				},
+			},
+			{
+				$group: {
+					_id: "$type",
+					totalAmount: { $sum: "$amount" },
+					count: { $sum: 1 },
+				},
+			},
+		]);
+
+		res.status(200).json({
+			success: true,
+			data: {
+				campaign,
+				donationStats,
+			},
+		});
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Error fetching campaign details",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};
+
+// Update campaign
+export const updateCampaign = async (req: Request, res: Response) => {
+	try {
+		if (!req.user?._id) {
+			return res.status(401).json({ message: "User not authenticated" });
+		}
+
+		const { campaignId } = req.params;
+		const updateData = req.body;
+
+		if (!validateObjectId(campaignId)) {
+			return res.status(400).json({ message: "Invalid campaign ID" });
+		}
+
+		const campaign = await Campaign.findById(campaignId);
+
+		if (!campaign) {
+			return res.status(404).json({ message: "Campaign not found" });
+		}
+
+		// Check if user is from one of the campaign organizations
+		if (!campaign.organizations.includes(req.user._id)) {
+			return res
+				.status(403)
+				.json({ message: "Not authorized to update this campaign" });
+		}
+
+		// Prevent updating certain fields
+		delete updateData.totalRaisedAmount;
+		delete updateData.totalSupporters;
+		delete updateData.createdAt;
+		delete updateData.updatedAt;
+
+		// Validate organization IDs if provided
+		if (updateData.organizations) {
+			for (const orgId of updateData.organizations) {
+				if (!validateObjectId(orgId)) {
+					return res
+						.status(400)
+						.json({ message: `Invalid organization ID: ${orgId}` });
+				}
+			}
+		}
+
+		// Validate cause IDs if provided
+		if (updateData.causes) {
+			for (const causeId of updateData.causes) {
+				if (!validateObjectId(causeId)) {
+					return res
+						.status(400)
+						.json({ message: `Invalid cause ID: ${causeId}` });
+				}
+			}
+		}
+
+		const updatedCampaign = await Campaign.findByIdAndUpdate(
+			campaignId,
+			{ $set: updateData },
+			{ new: true, runValidators: true }
+		)
+			.populate("organizations", "name email phone")
+			.populate("causes", "title description");
+
+		res.status(200).json({
+			success: true,
+			data: updatedCampaign,
+		});
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Error updating campaign",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};
+
+// Update campaign status
+export const updateCampaignStatus = async (req: Request, res: Response) => {
+	try {
+		if (!req.user?._id) {
+			return res.status(401).json({ message: "User not authenticated" });
+		}
+
+		const { campaignId } = req.params;
+		const { status } = req.body;
+
+		if (!validateObjectId(campaignId)) {
+			return res.status(400).json({ message: "Invalid campaign ID" });
+		}
+
+		const campaign = await Campaign.findById(campaignId);
+
+		if (!campaign) {
+			return res.status(404).json({ message: "Campaign not found" });
+		}
+
+		// Check if user is from one of the campaign organizations
+		if (!campaign.organizations.includes(req.user._id)) {
+			return res
+				.status(403)
+				.json({ message: "Not authorized to update this campaign" });
+		}
+
+		// Validate status
+		const validStatuses = ["draft", "active", "completed", "cancelled"];
+		if (!validStatuses.includes(status)) {
+			return res.status(400).json({ message: "Invalid status" });
+		}
+
+		campaign.status = status;
+		await campaign.save();
+
+		res.status(200).json({
+			success: true,
+			data: campaign,
+		});
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Error updating campaign status",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};

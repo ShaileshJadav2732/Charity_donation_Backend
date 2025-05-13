@@ -8,6 +8,9 @@ import profileRoutes from "./routes/profile.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import causeRoutes from "./routes/cause.routes";
 import campaignRoutes from "./routes/campaign.routes";
+import feedbackRoutes from "./routes/feedback.routes";
+import notificationRoutes from "./routes/notification.routes";
+import adminRoutes from "./routes/admin.routes";
 
 // Load environment variables
 dotenv.config();
@@ -30,8 +33,11 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
 app.use("/api/campaigns", campaignRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/admin", adminRoutes);
 
-// Health chec  k route
+// Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
 });

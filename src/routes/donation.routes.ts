@@ -1,8 +1,8 @@
 import express from "express";
 import {
 	createDonation,
-	getDonations,
-	getDonationById,
+	getDonorDonations,
+	getDonationDetails,
 	updateDonationStatus,
 	cancelDonation,
 } from "../controllers/donation.controller";
@@ -11,22 +11,20 @@ import { authorize } from "../middleware/role.middleware";
 
 const router = express.Router();
 
-// Create donation
-router.post("/", authenticate, createDonation);
+// All routes require authentication
+router.use(authenticate);
 
-// Get all donations (with filters)
-router.get("/", authenticate, getDonations);
+// Create a new donation
+router.post("/", createDonation);
 
-// Get single donation
-router.get("/:id", authenticate, getDonationById);
+// Get donor's donations with optional filtering
+router.get("/", getDonorDonations);
 
-// Update donation status (organization only)
-router.patch(
-	"/:id/status",
-	authenticate,
-	authorize(["organization"]),
-	updateDonationStatus
-);
+// Get specific donation details
+router.get("/:donationId", getDonationDetails);
+
+// Update donation status (only for cancellation by donor)
+router.patch("/:donationId/status", updateDonationStatus);
 
 // Cancel donation (donor or organization)
 router.patch(
