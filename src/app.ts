@@ -11,7 +11,7 @@ import campaignRoutes from "./routes/campaign.routes";
 import feedbackRoutes from "./routes/feedback.routes";
 import notificationRoutes from "./routes/notification.routes";
 import adminRoutes from "./routes/admin.routes";
-
+import donationRoutes from "./routes/donation.routes";
 // Load environment variables
 dotenv.config();
 
@@ -36,7 +36,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
-
+app.use("/api/donations", donationRoutes);
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
@@ -45,7 +45,7 @@ app.get("/health", (req: Request, res: Response) => {
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: Function) => {
 	console.error(err.stack);
-	res.status(err.status || 500).json({
+	res.status(500).json({
 		status: "error",
 		message: err.message || "Internal server error",
 	});

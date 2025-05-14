@@ -87,7 +87,17 @@ const CampaignSchema: Schema = new Schema(
 			type: [
 				{
 					type: String,
-					enum: Object.values(DonationType),
+					enum: [
+						"MONEY",
+						"CLOTHES",
+						"BLOOD",
+						"FOOD",
+						"TOYS",
+						"BOOKS",
+						"FURNITURE",
+						"HOUSEHOLD",
+						"OTHER",
+					],
 				},
 			],
 			required: [true, "At least one donation type is required"],

@@ -49,3 +49,15 @@ export interface IOrganizationProfile {
 export interface AuthRequest extends Request {
 	user?: IUser;
 }
+
+export enum DonationType {
+	MONEY = "MONEY",
+	CLOTHES = "CLOTHES",
+	BLOOD = "BLOOD",
+	FOOD = "FOOD",
+	TOYS = "TOYS",
+	BOOKS = "BOOKS",
+	FURNITURE = "FURNITURE",
+	HOUSEHOLD = "HOUSEHOLD",
+	OTHER = "OTHER",
+}
