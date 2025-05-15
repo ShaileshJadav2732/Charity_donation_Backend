@@ -17,6 +17,8 @@ export const createDonation = async (req: Request, res: Response) => {
 
 		const {
 			organization,
+			campaign,
+			cause,
 			type,
 			amount,
 			description,
@@ -41,6 +43,8 @@ export const createDonation = async (req: Request, res: Response) => {
 		const donation = new Donation({
 			donor: req.user._id,
 			organization,
+			campaign,
+			cause,
 			type,
 			status: DonationStatus.PENDING,
 			amount: type === DonationType.MONEY ? amount : undefined,

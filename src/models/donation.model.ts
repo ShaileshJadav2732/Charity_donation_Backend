@@ -68,6 +68,14 @@ const DonationSchema: Schema = new Schema(
 			ref: "Organization",
 			required: true,
 		},
+		campaign: {
+			type: Schema.Types.ObjectId,
+			ref: "Campaign",
+		},
+		cause: {
+			type: Schema.Types.ObjectId,
+			ref: "Cause",
+		},
 		type: {
 			type: String,
 			enum: Object.values(DonationType),
