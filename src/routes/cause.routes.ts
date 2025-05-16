@@ -7,6 +7,7 @@ import {
 	deleteCause,
 	getOrganizationCauses,
 	getDonorCauses,
+	getActiveCampaignCauses,
 } from "../controllers/cause.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
@@ -15,6 +16,7 @@ const router = express.Router();
 
 // Public routes
 router.get("/", getCauses);
+router.get("/active-campaigns", getActiveCampaignCauses);
 router.get("/:causeId", getCauseDetails);
 
 // Protected routes - Organization only

@@ -360,3 +360,71 @@ export const getCauseDetails = catchAsync(
 		}
 	}
 );
+
+// Get causes that are associated with active campaigns only
+export const getActiveCampaignCauses = catchAsync(
+	async (req: Request, res: Response) => {
+		const page = parseInt(req.query.page as string) || 1;
+		const limit = parseInt(req.query.limit as string) || 10;
+		const search = req.query.search as string;
+		const tag = req.query.tag as string;
+
+		try {
+			console.log("Getting causes from active campaigns");
+
+			// First get all active campaigns
+			const activeCampaigns = await Campaign.find({ status: "active" }).select(
+				"_id causes"
+			);
+
+			// Extract all cause IDs from active campaigns
+			const activeCausesIds = new Set();
+			activeCampaigns.forEach((campaign) => {
+				campaign.causes.forEach((causeId: mongoose.Types.ObjectId) => {
+					activeCausesIds.add(causeId.toString());
+				});
+			});
+
+			console.log(
+				`Found ${activeCausesIds.size} unique causes from active campaigns`
+			);
+
+			// Build query for causes
+			const query: any = {
+				_id: { $in: Array.from(activeCausesIds) },
+			};
+
+			if (search) {
+				query.$text = { $search: search };
+			}
+
+			if (tag) {
+				query.tags = tag;
+			}
+
+			const skip = (page - 1) * limit;
+
+			// Query for causes that are in active campaigns
+			const [causes, total] = await Promise.all([
+				Cause.find(query)
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(limit)
+					.populate("organizationId", "name"),
+				Cause.countDocuments(query),
+			]);
+
+			console.log(`Returning ${causes.length} causes from active campaigns`);
+
+			res.status(200).json({
+				causes: causes.map(formatCauseResponse),
+				total,
+				page,
+				limit,
+			});
+		} catch (error) {
+			console.error("Error fetching active campaign causes:", error);
+			throw new AppError("Error fetching active campaign causes", 500);
+		}
+	}
+);

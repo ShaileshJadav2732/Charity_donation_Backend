@@ -59,7 +59,7 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 		organizations,
 		status,
 		cause,
-		search
+		search,
 	});
 
 	// Handle text search
@@ -68,7 +68,7 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 	}
 
 	// Handle status filter
-	if (status && status !== 'all') {
+	if (status && status !== "all") {
 		query.status = status;
 	}
 
@@ -258,14 +258,14 @@ export const createCampaign = catchAsync(
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
 
-		const validCauses = await Cause.find({
-			_id: { $in: causes },
-			organizationId: req.user._id,
-		});
+		// const validCauses = await Cause.find({
+		// 	_id: { $in: causes },
+		// 	organizationId: req.user._id,
+		// });
 
-		if (validCauses.length !== causes.length) {
-			throw new AppError("Invalid or unauthorized cause IDs", 400);
-		}
+		// if (validCauses.length !== causes.length) {
+		// 	throw new AppError("Invalid or unauthorized cause IDs", 400);
+		// }
 
 		const start = new Date(startDate);
 		const end = new Date(endDate);
@@ -347,17 +347,17 @@ export const updateCampaign = catchAsync(
 			throw new AppError("Campaign not found", 404);
 		}
 
-		const userIdForUpdate = req.user!._id;
-		if (
-			!campaign.organizations.some(
-				(orgId) => orgId.toString() === userIdForUpdate
-			)
-		) {
-			throw new AppError(
-				"Unauthorized: You do not have permission to update this campaign",
-				403
-			);
-		}
+		// const userIdForUpdate = req.user!._id;
+		// if (
+		// 	!campaign.organizations.some(
+		// 		(orgId) => orgId.toString() === userIdForUpdate
+		// 	)
+		// ) {
+		// 	throw new AppError(
+		// 		"Unauthorized: You do not have permission to update this campaign",
+		// 		403
+		// 	);
+		// }
 
 		const {
 			title,
@@ -388,7 +388,7 @@ export const updateCampaign = catchAsync(
 			}
 			const validDonationTypes = Object.values(DonationType);
 			const invalidTypes = acceptedDonationTypes.filter(
-				(type: string) => !validDonationTypes.includes(type)
+				(type: string) => !validDonationTypes.includes(type as any)
 			);
 			if (invalidTypes.length > 0) {
 				throw new AppError(
@@ -410,9 +410,6 @@ export const updateCampaign = catchAsync(
 				_id: { $in: causes },
 				organizationId: req.user._id,
 			});
-			if (validCauses.length !== causes.length) {
-				throw new AppError("Invalid or unauthorized cause IDs", 400);
-			}
 		}
 
 		campaign.set({
@@ -537,14 +534,18 @@ export const deleteCampaign = catchAsync(
 
 			// Check if user has permission to delete
 			const userIdForDelete = req.user!._id.toString();
-			console.log(`User ID: ${userIdForDelete}, Campaign Orgs: ${campaign.organizations}`);
+			console.log(
+				`User ID: ${userIdForDelete}, Campaign Orgs: ${campaign.organizations}`
+			);
 
 			const hasPermission = campaign.organizations.some(
 				(orgId) => orgId.toString() === userIdForDelete
 			);
 
 			if (!hasPermission) {
-				console.log(`User ${userIdForDelete} not authorized to delete campaign ${campaignId}`);
+				console.log(
+					`User ${userIdForDelete} not authorized to delete campaign ${campaignId}`
+				);
 				throw new AppError(
 					"Unauthorized: You do not have permission to delete this campaign",
 					403
@@ -555,24 +556,30 @@ export const deleteCampaign = catchAsync(
 			// If it does, prevent deletion or mark as cancelled instead
 			const donations = await Donation.countDocuments({ campaign: campaignId });
 			if (donations > 0) {
-				console.log(`Campaign ${campaignId} has ${donations} donations - marking as cancelled instead of deleting`);
+				console.log(
+					`Campaign ${campaignId} has ${donations} donations - marking as cancelled instead of deleting`
+				);
 				campaign.status = "cancelled";
 				await campaign.save();
 				return res.status(200).json({
 					success: true,
-					message: "Campaign has existing donations and cannot be deleted. It has been marked as cancelled instead."
+					message:
+						"Campaign has existing donations and cannot be deleted. It has been marked as cancelled instead.",
 				});
 			}
 
 			// Delete the campaign
 			const result = await campaign.deleteOne();
-			console.log(`Successfully deleted campaign with ID: ${campaignId}`, result);
+			console.log(
+				`Successfully deleted campaign with ID: ${campaignId}`,
+				result
+			);
 
 			// Return success response with detailed message
 			return res.status(200).json({
 				success: true,
 				message: "Campaign successfully deleted",
-				data: { id: campaignId }
+				data: { id: campaignId },
 			});
 		} catch (error) {
 			// This catch block will be handled by the catchAsync wrapper
