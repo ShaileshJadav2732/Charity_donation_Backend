@@ -12,6 +12,8 @@ import feedbackRoutes from "./routes/feedback.routes";
 import notificationRoutes from "./routes/notification.routes";
 import adminRoutes from "./routes/admin.routes";
 import donationRoutes from "./routes/donation.routes";
+import organizationRoutes from "./routes/organization.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 // Load environment variables
 dotenv.config();
 
@@ -37,6 +39,7 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/donations", donationRoutes);
+app.use("/api/auth", authRoutes);
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });

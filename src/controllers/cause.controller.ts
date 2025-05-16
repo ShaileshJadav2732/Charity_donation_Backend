@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Cause, { ICause } from "../models/cause.model";
 import Donation from "../models/donation.model";
 import Campaign from "../models/campaign.model";
+import Organization from "../models/organization.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
@@ -83,6 +84,7 @@ export const getCauseById = catchAsync(async (req: Request, res: Response) => {
 });
 
 // Create a new cause (organization only)
+
 export const createCause = catchAsync(
 	async (req: AuthRequest, res: Response) => {
 		if (!req.user) {
@@ -96,18 +98,25 @@ export const createCause = catchAsync(
 			throw new AppError("Missing required fields", 400);
 		}
 
-		// Validate targetAmount
 		if (targetAmount <= 0) {
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
 
+		// ✅ Find the organization based on the logged-in user's ID
+		const organization = await Organization.findOne({ userId: req.user._id });
+
+		if (!organization) {
+			throw new AppError("Organization not found for the logged-in user", 404);
+		}
+
+		// ✅ Use organization._id as the reference
 		const cause = await Cause.create({
 			title,
 			description,
 			targetAmount,
 			imageUrl,
 			tags: tags || [],
-			organizationId: req.user._id,
+			organizationId: organization._id,
 		});
 
 		await cause.populate("organizationId", "name");
@@ -117,6 +126,7 @@ export const createCause = catchAsync(
 		});
 	}
 );
+
 
 // Update an existing cause (organization only)
 export const updateCause = catchAsync(
