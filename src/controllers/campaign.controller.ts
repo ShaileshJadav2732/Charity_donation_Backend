@@ -40,6 +40,7 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 		search,
 		status,
 		organization,
+		organizations,
 		cause,
 		tag,
 		startDate,
@@ -51,38 +52,65 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 	} = req.query;
 
 	const query: any = {};
-	//
-	// 	if (search) {
-	// 		query.$text = { $search: search as string };
-	// 	}
 
-	// if (status) {
-	// 	query.status = status;
-	// }
+	// Log query parameters for debugging
+	console.log("Campaign query parameters:", {
+		organization,
+		organizations,
+		status,
+		cause,
+		search
+	});
 
+	// Handle text search
+	if (search) {
+		query.$text = { $search: search as string };
+	}
+
+	// Handle status filter
+	if (status && status !== 'all') {
+		query.status = status;
+	}
+
+	// Handle organization filter - check for specific organization
 	if (organization) {
 		if (!validateObjectId(organization as string)) {
 			throw new AppError("Invalid organization ID", 400);
 		}
-		query.organizationId = organization;
+		query.organizations = organization;
 	}
-	//
-	// 	if (cause) {
-	// 		if (!validateObjectId(cause as string)) {
-	// 			throw new AppError("Invalid cause ID", 400);
-	// 		}
-	// 		query.causes = cause;
-	// 	}
-	//
-	// 	if (tag) {
-	// 		query.tags = tag;
-	// 	}
 
+	// Handle organizations filter - used from frontend
+	if (organizations) {
+		if (!validateObjectId(organizations as string)) {
+			throw new AppError("Invalid organizations parameter", 400);
+		}
+		// Use $in to match any ID in the organizations array
+		query.organizations = { $in: [organizations] };
+	}
+
+	// Handle cause filter
+	if (cause) {
+		if (!validateObjectId(cause as string)) {
+			throw new AppError("Invalid cause ID", 400);
+		}
+		query.causes = cause;
+	}
+
+	// Handle tag filter
+	if (tag) {
+		query.tags = tag;
+	}
+
+	// Handle date filter
 	if (startDate || endDate) {
 		query.startDate = {};
 		if (startDate) query.startDate.$gte = new Date(startDate as string);
 		if (endDate) query.startDate.$lte = new Date(endDate as string);
 	}
+
+	// Log the final query for debugging
+	console.log("Final campaign query:", query);
 
 	const sort: any = {};
 	sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
@@ -98,6 +126,9 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 			.limit(Number(limit)),
 		Campaign.countDocuments(query),
 	]);
+
+	// Log the found campaigns
+	console.log(`Found ${campaigns.length} campaigns`);
 
 	res.status(200).json({
 		success: true,
@@ -137,43 +168,48 @@ export const getCampaignById = catchAsync(
 // Get campaign details with donation statistics
 export const getCampaignDetails = catchAsync(
 	async (req: Request, res: Response) => {
-		const { campaignId } = req.params;
+		try {
+			const { campaignId } = req.params;
 
-		if (!validateObjectId(campaignId)) {
-			throw new AppError("Invalid campaign ID", 400);
-		}
+			if (!validateObjectId(campaignId)) {
+				throw new AppError("Invalid campaign ID format", 400);
+			}
 
-		const campaign = await Campaign.findById(campaignId)
-			.populate("organizations", "name email phone address")
-			.populate("causes", "title description targetAmount raisedAmount");
+			const campaign = await Campaign.findById(campaignId)
+				.populate("organizations", "name email phone address")
+				.populate("causes", "title description targetAmount raisedAmount");
 
-		if (!campaign) {
-			throw new AppError("Campaign not found", 404);
-		}
+			if (!campaign) {
+				throw new AppError("Campaign not found", 404);
+			}
 
-		const donationStats = await Donation.aggregate([
-			{
-				$match: {
-					campaign: new mongoose.Types.ObjectId(campaignId),
-					status: { $ne: "CANCELLED" },
+			const donationStats = await Donation.aggregate([
+				{
+					$match: {
+						campaign: new mongoose.Types.ObjectId(campaignId),
+						status: { $ne: "CANCELLED" },
+					},
 				},
-			},
-			{
-				$group: {
-					_id: "$type",
-					totalAmount: { $sum: "$amount" },
-					count: { $sum: 1 },
+				{
+					$group: {
+						_id: "$type",
+						totalAmount: { $sum: "$amount" },
+						count: { $sum: 1 },
+					},
 				},
-			},
-		]);
+			]);
 
-		res.status(200).json({
-			success: true,
-			data: {
-				campaign: formatCampaignResponse(campaign),
-				donationStats,
-			},
-		});
+			res.status(200).json({
+				success: true,
+				data: {
+					campaign: formatCampaignResponse(campaign),
+					donationStats,
+				},
+			});
+		} catch (err) {
+			console.error("Error getting campaign details:", err);
+			throw err;
+		}
 	}
 );
 
@@ -475,42 +511,74 @@ export const updateCampaignStatus = catchAsync(
 // Delete a campaign
 export const deleteCampaign = catchAsync(
 	async (req: AuthRequest, res: Response) => {
-		if (!req.user || req.user.role !== "organization") {
-			throw new AppError(
-				"Unauthorized: Only organizations can delete campaigns",
-				403
-			);
-		}
+		try {
+			// Check authorization
+			if (!req.user || req.user.role !== "organization") {
+				throw new AppError(
+					"Unauthorized: Only organizations can delete campaigns",
+					403
+				);
+			}
 
-		const { campaignId } = req.params;
+			const { campaignId } = req.params;
+			console.log(`Attempting to delete campaign with ID: ${campaignId}`);
 
-		if (!validateObjectId(campaignId)) {
-			throw new AppError("Invalid campaign ID", 400);
-		}
+			// Validate ID format
+			if (!validateObjectId(campaignId)) {
+				throw new AppError("Invalid campaign ID format", 400);
+			}
 
-		const campaign = await Campaign.findById(campaignId);
+			// Find the campaign
+			const campaign = await Campaign.findById(campaignId);
+			if (!campaign) {
+				console.log(`Campaign not found with ID: ${campaignId}`);
+				throw new AppError("Campaign not found", 404);
+			}
 
-		if (!campaign) {
-			throw new AppError("Campaign not found", 404);
-		}
+			// Check if user has permission to delete
+			const userIdForDelete = req.user!._id.toString();
+			console.log(`User ID: ${userIdForDelete}, Campaign Orgs: ${campaign.organizations}`);
 
-		const userIdForDelete = req.user!._id;
-		if (
-			!campaign.organizations.some(
+			const hasPermission = campaign.organizations.some(
 				(orgId) => orgId.toString() === userIdForDelete
-			)
-		) {
-			throw new AppError(
-				"Unauthorized: You do not have permission to delete this campaign",
-				403
 			);
+
+			if (!hasPermission) {
+				console.log(`User ${userIdForDelete} not authorized to delete campaign ${campaignId}`);
+				throw new AppError(
+					"Unauthorized: You do not have permission to delete this campaign",
+					403
+				);
+			}
+
+			// Check if the campaign has donations
+			// If it does, prevent deletion or mark as cancelled instead
+			const donations = await Donation.countDocuments({ campaign: campaignId });
+			if (donations > 0) {
+				console.log(`Campaign ${campaignId} has ${donations} donations - marking as cancelled instead of deleting`);
+				campaign.status = "cancelled";
+				await campaign.save();
+				return res.status(200).json({
+					success: true,
+					message: "Campaign has existing donations and cannot be deleted. It has been marked as cancelled instead."
+				});
+			}
+
+			// Delete the campaign
+			const result = await campaign.deleteOne();
+			console.log(`Successfully deleted campaign with ID: ${campaignId}`, result);
+
+			// Return success response with detailed message
+			return res.status(200).json({
+				success: true,
+				message: "Campaign successfully deleted",
+				data: { id: campaignId }
+			});
+		} catch (error) {
+			// This catch block will be handled by the catchAsync wrapper
+			console.error(`Error deleting campaign:`, error);
+			throw error;
 		}
-
-		await campaign.deleteOne();
-
-		res.status(204).json({
-			success: true,
-		});
 	}
 );
 

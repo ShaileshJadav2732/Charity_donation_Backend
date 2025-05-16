@@ -44,10 +44,39 @@ app.get("/health", (req: Request, res: Response) => {
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: Function) => {
-	console.error(err.stack);
+	console.error("Error:", err);
+
+	// Check if it's a known operational error
+	if (err.isOperational) {
+		return res.status(err.statusCode).json({
+			success: false,
+			status: err.status,
+			message: err.message
+		});
+	}
+
+	// MongoDB errors
+	if (err.name === 'CastError') {
+		return res.status(400).json({
+			success: false,
+			status: 'fail',
+			message: 'Invalid ID format'
+		});
+	}
+
+	if (err.name === 'ValidationError') {
+		return res.status(400).json({
+			success: false,
+			status: 'fail',
+			message: 'Validation error in the request data'
+		});
+	}
+
+	// For all other unexpected errors
 	res.status(500).json({
-		status: "error",
-		message: err.message || "Internal server error",
+		success: false,
+		status: 'error',
+		message: 'Something went wrong. Please try again later.'
 	});
 });
 
