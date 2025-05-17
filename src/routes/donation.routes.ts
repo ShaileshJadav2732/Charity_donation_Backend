@@ -5,6 +5,7 @@ import {
 	getDonationDetails,
 	updateDonationStatus,
 	cancelDonation,
+	getDonorStats,
 } from "../controllers/donation.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
@@ -20,6 +21,7 @@ router.post("/", createDonation);
 // Get donor's donations with optional filtering
 router.get("/", getDonorDonations);
 
+router.get("/donor/stats", getDonorStats);
 // Get specific donation details
 router.get("/:donationId", getDonationDetails);
 

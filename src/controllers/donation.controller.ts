@@ -35,9 +35,9 @@ export const createDonation = async (req: Request, res: Response) => {
 		} = req.body;
 
 		// Validate organization ID
-		if (!validateObjectId(organization)) {
-			return res.status(400).json({ message: "Invalid organization ID" });
-		}
+		// if (!validateObjectId(organization)) {
+		// 	return res.status(400).json({ message: "Invalid organization ID" });
+		// }
 
 		// Create new donation
 		const donation = new Donation({
@@ -294,6 +294,56 @@ export const cancelDonation = async (req: AuthRequest, res: Response) => {
 		res.status(400).json({
 			success: false,
 			error: error instanceof Error ? error.message : "An error occurred",
+		});
+	}
+};
+
+export const getDonorStats = async (req: Request, res: Response) => {
+	try {
+		// const donorId = req.user?._id;
+		const donorId = req.user?._id;
+		if (!donorId) {
+			return res.status(401).json({ success: false, message: "Unauthorized" });
+		}
+
+		// Aggregate donations for the logged-in donor
+		const stats = await Donation.aggregate([
+			{
+				$match: {
+					donor: donorId,
+					amount: { $ne: null }, // Exclude donations without a defined amount
+				},
+			},
+			{
+				$group: {
+					_id: null,
+					totalDonated: { $sum: "$amount" },
+					averageDonation: { $avg: "$amount" },
+					causeIds: { $addToSet: "$cause" },
+				},
+			},
+			{
+				$project: {
+					_id: 0,
+					totalDonated: 1,
+					averageDonation: { $ifNull: ["$averageDonation", 0] },
+					totalCauses: { $size: "$causeIds" },
+				},
+			},
+		]);
+
+		const result = stats[0] || {
+			totalDonated: 0,
+			averageDonation: 0,
+			totalCauses: 0,
+		};
+
+		res.status(200).json({ success: true, data: result });
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch donor stats",
+			error: error?.message || "Unknown error",
 		});
 	}
 };
