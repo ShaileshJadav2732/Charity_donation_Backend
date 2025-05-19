@@ -7,6 +7,9 @@ import Donation, {
 import { AuthRequest } from "../types";
 import { sendEmail } from "../utils/email";
 import { validateObjectId } from "../utils/validation";
+import { sendDonationStatusNotification } from "../utils/notification";
+import { IUser } from "../types";
+
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {
@@ -159,30 +162,55 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			return res.status(400).json({ message: "Invalid donation ID" });
 		}
 
+		// Find donation and check if user has permission
 		const donation = await Donation.findOne({
 			_id: donationId,
-			donor: req.user._id,
-		});
+			$or: [
+				{ donor: req.user._id },
+				{ organization: req.user._id }
+			]
+		}).populate<{ donor: IUser }>('donor', 'name email');
 
 		if (!donation) {
 			return res.status(404).json({ message: "Donation not found" });
 		}
 
-		// Only allow certain status updates from donor
-		const allowedStatusUpdates = [DonationStatus.CANCELLED];
-
-		if (!allowedStatusUpdates.includes(status)) {
-			return res.status(400).json({
-				message: "Invalid status update for donor",
-			});
+		// If user is donor, only allow cancellation
+		if (donation.donor.toString() === req.user._id.toString()) {
+			if (status !== DonationStatus.CANCELLED) {
+				return res.status(403).json({
+					message: "Donors can only cancel donations"
+				});
+			}
 		}
 
+		// If user is organization, allow all status updates except CANCELLED
+		if (donation.organization.toString() === req.user._id.toString()) {
+			if (status === DonationStatus.CANCELLED) {
+				return res.status(403).json({
+					message: "Organizations cannot cancel donations"
+				});
+			}
+		}
+
+		const oldStatus = donation.status;
 		donation.status = status;
 		await donation.save();
+
+		// Send notification to donor about status change
+		if (donation.donor && typeof donation.donor === 'object' && 'email' in donation.donor) {
+			await sendDonationStatusNotification(
+				donation.donor.email as string,
+				donationId,
+				status,
+				donation.donor.name
+			);
+		}
 
 		res.status(200).json({
 			success: true,
 			data: donation,
+			message: `Donation status updated from ${oldStatus} to ${status}`
 		});
 	} catch (error: any) {
 		res.status(500).json({
@@ -419,6 +447,9 @@ export const findOrganizationPendingDonations = async (
 	try {
 		// Get organization ID from request params
 		const { organizationId } = req.params;
+		console.log("Backend - Received organizationId:", organizationId);
+		console.log("Backend - Full request params:", req.params);
+		console.log("Backend - Query parameters:", req.query);
 
 		// Verify the organization ID is valid
 		if (!organizationId) {
@@ -433,9 +464,11 @@ export const findOrganizationPendingDonations = async (
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 10;
 
-		console.log(
-			`Searching donations for organization: ${organizationId} with status: ${status}`
-		);
+		console.log("Backend - Query parameters after parsing:", {
+			status,
+			page,
+			limit
+		});
 
 		// Create query based on inputs
 		const donations = await Donation.find({
@@ -448,13 +481,15 @@ export const findOrganizationPendingDonations = async (
 			.skip((page - 1) * limit)
 			.limit(limit);
 
+		console.log("Backend - Found donations:", donations);
+
 		// Get total count for pagination
 		const total = await Donation.countDocuments({
 			organization: organizationId,
 			status: status,
 		});
 
-		console.log(`Found ${donations.length} donations out of ${total} total`);
+		console.log(`Backend - Found ${donations.length} donations out of ${total} total`);
 
 		// Return the results
 		res.status(200).json({
@@ -475,3 +510,71 @@ export const findOrganizationPendingDonations = async (
 		});
 	}
 };
+//
+// export const updateDonationStatus = async (req: Request, res: Response) => {
+// 	try {
+// 		if (!req.user?._id) {
+// 			return res.status(401).json({ message: "User not authenticated" });
+// 		}
+//
+// 		const { donationId } = req.params;
+// 		const { status } = req.body;
+//
+// 		if (!validateObjectId(donationId)) {
+// 			return res.status(400).json({ message: "Invalid donation ID" });
+// 		}
+//
+// 		// Find donation and check if user has permission
+// 		const donation = await Donation.findOne({
+// 			_id: donationId,
+// 			$or: [
+// 				{ donor: req.user._id },
+// 				{ organization: req.user._id }
+// 			]
+// 		});
+//
+// 		if (!donation) {
+// 			return res.status(404).json({ message: "Donation not found" });
+// 		}
+//
+// 		// Check if status is valid
+// 		if (!Object.values(DonationStatus).includes(status)) {
+// 			return res.status(400).json({
+// 				message: "Invalid status",
+// 				allowedStatuses: Object.values(DonationStatus)
+// 			});
+// 		}
+//
+// 		// If user is donor, only allow cancellation
+// 		if (donation.donor.toString() === req.user._id.toString()) {
+// 			if (status !== DonationStatus.CANCELLED) {
+// 				return res.status(403).json({
+// 					message: "Donors can only cancel donations"
+// 				});
+// 			}
+// 		}
+//
+// 		// If user is organization, allow all status updates except CANCELLED
+// 		if (donation.organization.toString() === req.user._id.toString()) {
+// 			if (status === DonationStatus.CANCELLED) {
+// 				return res.status(403).json({
+// 					message: "Organizations cannot cancel donations"
+// 				});
+// 			}
+// 		}
+//
+// 		donation.status = status;
+// 		await donation.save();
+//
+// 		res.status(200).json({
+// 			success: true,
+// 			data: donation,
+// 		});
+// 	} catch (error: any) {
+// 		res.status(500).json({
+// 			success: false,
+// 			message: "Error updating donation status",
+// 			error: error?.message || "Unknown error occurred",
+// 		});
+// 	}
+// };

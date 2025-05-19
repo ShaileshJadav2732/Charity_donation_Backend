@@ -11,6 +11,7 @@ import {
 } from "../controllers/donation.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
+import { validateDonationId, validateDonationStatus } from "../middleware/donation.middleware";
 
 const router = express.Router();
 // All routes require authentication
@@ -31,17 +32,22 @@ router.get(
 router.get("/donor/stats", getDonorStats);
 
 // Get specific donation details
-router.get("/:donationId", getDonationDetails);
+router.get("/:donationId", validateDonationId, getDonationDetails);
 
 // /donations/aagiinnoortz;
 // Update donation status (only for cancellation by donor)
 
-router.patch("/:donationId/status", updateDonationStatus);
+router.patch(
+	"/:donationId/status",
+	validateDonationId,
+	validateDonationStatus,
+	updateDonationStatus
+);
 
 // Cancel donation (donor or organization)
 router.patch(
-	"/:id/cancel",
-	authenticate,
+	"/:donationId/cancel",
+	validateDonationId,
 	authorize(["donor", "organization"]),
 	cancelDonation
 );

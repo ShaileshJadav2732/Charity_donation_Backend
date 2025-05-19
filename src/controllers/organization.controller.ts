@@ -4,6 +4,8 @@ import Organization from "../models/organization.model";
 import Cause from "../models/cause.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
+import { AuthRequest } from '../types';
+
 
 // Helper function to format organization response
 const formatOrganizationResponse = (organization: any) => ({
@@ -22,6 +24,25 @@ const formatOrganizationResponse = (organization: any) => ({
    createdAt: organization.createdAt.toISOString(),
    updatedAt: organization.updatedAt.toISOString(),
 });
+
+export const getCurrentOrganization = catchAsync(async (req: AuthRequest, res: Response) => {
+   if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+   }
+
+   const userId = req.user.id
+
+   const org = await Organization.findOne({ userId })
+
+   console.log("org", org)
+
+
+   return res.status(200).json({
+      message: 'Organization Profile',
+      organization: org,
+   });
+
+})
 
 // Get all organizations with pagination and search
 export const getOrganizations = catchAsync(async (req: Request, res: Response) => {
