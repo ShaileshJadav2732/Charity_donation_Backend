@@ -102,14 +102,14 @@ export const createCause = catchAsync(
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
 
-		// ✅ Find the organization based on the logged-in user's ID
+		//  Find the organization based on the logged-in user's ID
 		const organization = await Organization.findOne({ userId: req.user._id });
 
 		if (!organization) {
 			throw new AppError("Organization not found for the logged-in user", 404);
 		}
 
-		// ✅ Use organization._id as the reference
+		//  Use organization._id as the reference
 		const cause = await Cause.create({
 			title,
 			description,
@@ -306,70 +306,70 @@ export const getDonorCauses = catchAsync(
 );
 
 // Get cause details with campaign and donation statistics
-export const getCauseDetails = catchAsync(
-	async (req: Request, res: Response) => {
-		try {
-			const { causeId } = req.params;
-
-			if (!validateObjectId(causeId)) {
-				return res.status(400).json({ message: "Invalid cause ID" });
-			}
-
-			const cause = await Cause.findById(causeId).populate(
-				"organizationId",
-				"name email phone address"
-			);
-
-			if (!cause) {
-				return res.status(404).json({ message: "Cause not found" });
-			}
-
-			// Get associated campaigns
-			const campaigns = await Campaign.find({ causes: causeId })
-				.select("title description status totalTargetAmount totalRaisedAmount")
-				.populate("organizations", "name");
-
-			// Get donation statistics
-			const donationStats = await Donation.aggregate([
-				{
-					$match: {
-						cause: cause._id,
-						status: { $ne: "CANCELLED" },
-					},
-				},
-				{
-					$group: {
-						_id: "$type",
-						totalAmount: { $sum: "$amount" },
-						count: { $sum: 1 },
-					},
-				},
-			]);
-
-			// Calculate progress
-			const progress = {
-				percentage: (cause.raisedAmount / cause.targetAmount) * 100,
-				remaining: cause.targetAmount - cause.raisedAmount,
-			};
-
-			res.status(200).json({
-				success: true,
-				data: {
-					cause,
-					campaigns,
-					donationStats,
-					progress,
-				},
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				success: false,
-				message: "Error fetching cause details",
-				error: error?.message || "Unknown error occurred",
-			});
-		}
-	}
-);
+// export const getCauseDetails = catchAsync(
+// 	async (req: Request, res: Response) => {
+// 		try {
+// 			const { causeId } = req.params;
+// 
+// 			if (!validateObjectId(causeId)) {
+// 				return res.status(400).json({ message: "Invalid cause ID" });
+// 			}
+// 
+// 			const cause = await Cause.findById(causeId).populate(
+// 				"organizationId",
+// 				"name email phone address"
+// 			);
+// 
+// 			if (!cause) {
+// 				return res.status(404).json({ message: "Cause not found" });
+// 			}
+// 
+// 			// Get associated campaigns
+// 			const campaigns = await Campaign.find({ causes: causeId })
+// 				.select("title description status totalTargetAmount totalRaisedAmount")
+// 				.populate("organizations", "name");
+// 
+// 			// Get donation statistics
+// 			const donationStats = await Donation.aggregate([
+// 				{
+// 					$match: {
+// 						cause: cause._id,
+// 						status: { $ne: "CANCELLED" },
+// 					},
+// 				},
+// 				{
+// 					$group: {
+// 						_id: "$type",
+// 						totalAmount: { $sum: "$amount" },
+// 						count: { $sum: 1 },
+// 					},
+// 				},
+// 			]);
+// 
+// 			// Calculate progress
+// 			const progress = {
+// 				percentage: (cause.raisedAmount / cause.targetAmount) * 100,
+// 				remaining: cause.targetAmount - cause.raisedAmount,
+// 			};
+// 
+// 			res.status(200).json({
+// 				success: true,
+// 				data: {
+// 					cause,
+// 					campaigns,
+// 					donationStats,
+// 					progress,
+// 				},
+// 			});
+// 		} catch (error: any) {
+// 			res.status(500).json({
+// 				success: false,
+// 				message: "Error fetching cause details",
+// 				error: error?.message || "Unknown error occurred",
+// 			});
+// 		}
+// 	}
+// );
 
 // Get causes that are associated with active campaigns only
 export const getActiveCampaignCauses = catchAsync(

@@ -1,13 +1,14 @@
 import express from "express";
 import {
 	getCauses,
-	getCauseDetails,
+// getCauseDetails,
 	createCause,
 	updateCause,
 	deleteCause,
 	getOrganizationCauses,
 	getDonorCauses,
 	getActiveCampaignCauses,
+	getCauseById,
 } from "../controllers/cause.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
@@ -17,7 +18,7 @@ const router = express.Router();
 // Public routes
 router.get("/", getCauses);
 router.get("/active-campaigns", getActiveCampaignCauses);
-router.get("/:causeId", getCauseDetails);
+router.get("/:causeId", getCauseById);
 
 // Protected routes - Organization only
 router.post("/", authenticate, authorize(["organization"]), createCause);

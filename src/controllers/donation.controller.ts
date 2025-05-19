@@ -8,7 +8,7 @@ import Donation, {
 import { sendEmail } from "../utils/email";
 import { sendWhatsAppMessage } from "../utils/whatsapp";
 import { validateObjectId } from "../utils/validation";
-
+import Cause from "../models/cause.model";
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {
@@ -53,9 +53,9 @@ export const createDonation = async (req: Request, res: Response) => {
 			unit: type !== DonationType.MONEY ? unit : undefined,
 			scheduledDate: type !== DonationType.MONEY ? scheduledDate : undefined,
 			scheduledTime: type !== DonationType.MONEY ? scheduledTime : undefined,
-			pickupAddress,
-			dropoffAddress,
-			isPickup,
+			pickupAddress: type !== DonationType.MONEY ? pickupAddress : undefined,
+			dropoffAddress: type !== DonationType.MONEY ? dropoffAddress : undefined,
+			isPickup: type !== DonationType.MONEY ? isPickup : undefined,
 			contactPhone,
 			contactEmail,
 			notes,
@@ -300,50 +300,41 @@ export const cancelDonation = async (req: AuthRequest, res: Response) => {
 
 export const getDonorStats = async (req: Request, res: Response) => {
 	try {
-		// const donorId = req.user?._id;
-		const donorId = req.user?._id;
-		if (!donorId) {
-			return res.status(401).json({ success: false, message: "Unauthorized" });
-		}
-
-		// Aggregate donations for the logged-in donor
-		const stats = await Donation.aggregate([
-			{
-				$match: {
-					donor: donorId,
-					amount: { $ne: null }, // Exclude donations without a defined amount
-				},
-			},
+		const stats = await Cause.aggregate([
 			{
 				$group: {
 					_id: null,
-					totalDonated: { $sum: "$amount" },
-					averageDonation: { $avg: "$amount" },
-					causeIds: { $addToSet: "$cause" },
+					totalDonated: { $sum: "$raisedAmount" },
+					averageDonation: { $avg: "$raisedAmount" },
+					totalCauses: { $sum: 1 },
 				},
 			},
 			{
 				$project: {
 					_id: 0,
 					totalDonated: 1,
-					averageDonation: { $ifNull: ["$averageDonation", 0] },
-					totalCauses: { $size: "$causeIds" },
+					averageDonation: { $round: ["$averageDonation", 2] },
+					totalCauses: 1,
 				},
 			},
 		]);
 
-		const result = stats[0] || {
+		// If no causes exist, return zeros
+		const response = stats[0] || {
 			totalDonated: 0,
 			averageDonation: 0,
 			totalCauses: 0,
 		};
 
-		res.status(200).json({ success: true, data: result });
-	} catch (error: any) {
+		res.status(200).json({
+			success: true,
+			data: response,
+		});
+	} catch (error) {
+		console.error("Failed to fetch stats:", error);
 		res.status(500).json({
 			success: false,
-			message: "Failed to fetch donor stats",
-			error: error?.message || "Unknown error",
+			message: "Something went wrong",
 		});
 	}
 };
