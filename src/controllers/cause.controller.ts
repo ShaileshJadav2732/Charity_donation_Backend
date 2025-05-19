@@ -69,10 +69,8 @@ export const getCauses = catchAsync(async (req: Request, res: Response) => {
 
 // Get a single cause by ID
 export const getCauseById = catchAsync(async (req: Request, res: Response) => {
-	const cause = await Cause.findById(req.params.id).populate(
-		"organizationId",
-		"name"
-	);
+	// const causeId = req.params.id;
+	const cause = await Cause.findById(req.params.causeId);
 
 	if (!cause) {
 		throw new AppError("Cause not found", 404);
@@ -82,7 +80,26 @@ export const getCauseById = catchAsync(async (req: Request, res: Response) => {
 		cause: formatCauseResponse(cause),
 	});
 });
+// export const getCauseById = catchAsync(async (req: Request, res: Response) => {
+// 	const causeId = req.params.id;
 
+// 	if (!mongoose.Types.ObjectId.isValid(causeId)) {
+// 		throw new AppError("Invalid cause ID", 400);
+// 	}
+
+// 	const cause = await Cause.findById(req.params.causeId).populate(
+// 		"organizationId",
+// 		"name"
+// 	);
+
+// 	if (!cause) {
+// 		throw new AppError("Cause not found", 404);
+// 	}
+
+// 	res.status(200).json({
+// 		cause: formatCauseResponse(cause),
+// 	});
+// });
 // Create a new cause (organization only)
 
 export const createCause = catchAsync(
@@ -127,7 +144,6 @@ export const createCause = catchAsync(
 	}
 );
 
-
 // Update an existing cause (organization only)
 export const updateCause = catchAsync(
 	async (req: AuthRequest, res: Response) => {
@@ -135,18 +151,15 @@ export const updateCause = catchAsync(
 			throw new AppError("Unauthorized: Authentication required", 401);
 		}
 
-		const cause = await Cause.findById(req.params.id);
+		const causeId = await Cause.findById(req.params.id);
 
-		if (!cause) {
+		if (!causeId) {
 			throw new AppError("Cause not found", 404);
 		}
-
+		console.log("--------------------", causeId);
 		// Check if user's organization owns the cause
-		if (!cause.organizationId.equals(req.user._id)) {
-			throw new AppError(
-				"Unauthorized: You do not have permission to update this cause",
-				403
-			);
+		if (!req.user._id && req.user.role === "organization") {
+			throw Error("User Is not Authenticated ");
 		}
 
 		const { title, description, targetAmount, imageUrl, tags } = req.body;
@@ -155,7 +168,7 @@ export const updateCause = catchAsync(
 		if (targetAmount !== undefined && targetAmount <= 0) {
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
-
+		const cause = causeId;
 		// Update fields
 		cause.set({
 			title: title || cause.title,
@@ -305,71 +318,30 @@ export const getDonorCauses = catchAsync(
 	}
 );
 
-// Get cause details with campaign and donation statistics
-// export const getCauseDetails = catchAsync(
-// 	async (req: Request, res: Response) => {
-// 		try {
-// 			const { causeId } = req.params;
-// 
-// 			if (!validateObjectId(causeId)) {
-// 				return res.status(400).json({ message: "Invalid cause ID" });
-// 			}
-// 
-// 			const cause = await Cause.findById(causeId).populate(
-// 				"organizationId",
-// 				"name email phone address"
-// 			);
-// 
-// 			if (!cause) {
-// 				return res.status(404).json({ message: "Cause not found" });
-// 			}
-// 
-// 			// Get associated campaigns
-// 			const campaigns = await Campaign.find({ causes: causeId })
-// 				.select("title description status totalTargetAmount totalRaisedAmount")
-// 				.populate("organizations", "name");
-// 
-// 			// Get donation statistics
-// 			const donationStats = await Donation.aggregate([
-// 				{
-// 					$match: {
-// 						cause: cause._id,
-// 						status: { $ne: "CANCELLED" },
-// 					},
-// 				},
-// 				{
-// 					$group: {
-// 						_id: "$type",
-// 						totalAmount: { $sum: "$amount" },
-// 						count: { $sum: 1 },
-// 					},
-// 				},
-// 			]);
-// 
-// 			// Calculate progress
-// 			const progress = {
-// 				percentage: (cause.raisedAmount / cause.targetAmount) * 100,
-// 				remaining: cause.targetAmount - cause.raisedAmount,
-// 			};
-// 
-// 			res.status(200).json({
-// 				success: true,
-// 				data: {
-// 					cause,
-// 					campaigns,
-// 					donationStats,
-// 					progress,
-// 				},
-// 			});
-// 		} catch (error: any) {
-// 			res.status(500).json({
-// 				success: false,
-// 				message: "Error fetching cause details",
-// 				error: error?.message || "Unknown error occurred",
-// 			});
-// 		}
-// 	}
-// );
+export const getCauseDetailsById = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		// Validate ObjectId format
+		if (!mongoose.Types.ObjectId.isValid(id)) {
+			return res.status(400).json({ message: "Invalid cause ID format" });
+		}
+
+		const cause = await Cause.findById(id).populate(
+			"organizationId",
+			"name email"
+		);
+
+		if (!cause) {
+			return res.status(404).json({ message: "Cause not found" });
+		}
+
+		res.status(200).json({ success: true, data: cause });
+	} catch (error) {
+		console.error("Error fetching cause by ID:", error);
+		res.status(500).json({ message: "Internal server error" });
+	}
+};
 
 // Get causes that are associated with active campaigns only
 export const getActiveCampaignCauses = catchAsync(

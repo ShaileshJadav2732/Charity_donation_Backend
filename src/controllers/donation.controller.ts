@@ -1,14 +1,12 @@
 import { Request, Response } from "express";
-import { AuthRequest } from "../types";
-import Donation, {
-	DonationType,
-	DonationStatus,
-	IDonation,
-} from "../models/donation.model";
-import { sendEmail } from "../utils/email";
-import { sendWhatsAppMessage } from "../utils/whatsapp";
-import { validateObjectId } from "../utils/validation";
 import Cause from "../models/cause.model";
+import Donation, {
+	DonationStatus,
+	DonationType,
+} from "../models/donation.model";
+import { AuthRequest } from "../types";
+import { sendEmail } from "../utils/email";
+import { validateObjectId } from "../utils/validation";
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {
@@ -335,6 +333,145 @@ export const getDonorStats = async (req: Request, res: Response) => {
 		res.status(500).json({
 			success: false,
 			message: "Something went wrong",
+		});
+	}
+};
+
+//onlyorganization can accept
+
+// export const getPendingDonations = async (req: AuthRequest, res: Response) => {
+// 	try {
+// 		// Debug authentication info
+// 		console.log("Auth User:", {
+// 			id: req.user?.id,
+// 			_id: req.user?._id,
+// 			role: req.user?.role,
+// 		});
+
+// 		if (req.user?.role !== "organization") {
+// 			return res.status(403).json({
+// 				success: false,
+// 				message: "Only organization users can access pending donations",
+// 			});
+// 		}
+
+// 		// Get organization ID - check both possible properties
+// 		const orgId = req;
+// 		console.log("first", orgId);
+// 		console.log("Using organization ID:", orgId);
+
+// 		if (!orgId) {
+// 			return res.status(400).json({
+// 				success: false,
+// 				message: "Organization ID not found in request",
+// 			});
+// 		}
+
+// 		// Parse query parameters
+// 		const status = ((req.query.status as string) || "PENDING").toUpperCase();
+// 		const page = parseInt(req.query.page as string) || 1;
+// 		const limit = parseInt(req.query.limit as string) || 10;
+
+// 		console.log("Query params:", { status, page, limit });
+
+// 		// More efficient query - filter at database level
+// 		const donations = await Donation.find({
+// 			organization: orgId, // Query directly by organization field
+// 			status: status,
+// 		})
+// 			.populate("donor", "email name phone")
+// 			.populate("cause", "title")
+// 			.sort({ createdAt: -1 })
+// 			.skip((page - 1) * limit)
+// 			.limit(limit);
+
+// 		// Count total for pagination
+// 		const total = await Donation.countDocuments({
+// 			organization: orgId,
+// 			status: status,
+// 		});
+
+// 		console.log(`Found ${donations.length} donations out of ${total} total`);
+
+// 		res.status(200).json({
+// 			success: true,
+// 			data: donations,
+// 			pagination: {
+// 				total,
+// 				page,
+// 				pages: Math.ceil(total / limit),
+// 			},
+// 		});
+// 	} catch (error) {
+// 		console.error("Error in getPendingDonations:", error);
+// 		res.status(500).json({
+// 			success: false,
+// 			message: "Failed to fetch pending donations",
+// 			error: error instanceof Error ? error.message : "Unknown error",
+// 		});
+// 	}
+// };
+
+export const findOrganizationPendingDonations = async (
+	req: Request,
+	res: Response
+) => {
+	try {
+		// Get organization ID from request params
+		const { organizationId } = req.params;
+
+		// Verify the organization ID is valid
+		if (!organizationId) {
+			return res.status(400).json({
+				success: false,
+				message: "Organization ID is required",
+			});
+		}
+
+		// Parse query parameters
+		const status = (req.query.status as string)?.toUpperCase() || "PENDING";
+		const page = parseInt(req.query.page as string) || 1;
+		const limit = parseInt(req.query.limit as string) || 10;
+
+		console.log(
+			`Searching donations for organization: ${organizationId} with status: ${status}`
+		);
+
+		// Create query based on inputs
+		const donations = await Donation.find({
+			organization: organizationId,
+			status: status,
+		})
+			.populate("donor", "email name phone")
+			.populate("cause", "title")
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * limit)
+			.limit(limit);
+
+		// Get total count for pagination
+		const total = await Donation.countDocuments({
+			organization: organizationId,
+			status: status,
+		});
+
+		console.log(`Found ${donations.length} donations out of ${total} total`);
+
+		// Return the results
+		res.status(200).json({
+			success: true,
+			data: donations,
+			pagination: {
+				total,
+				page,
+				pages: Math.ceil(total / limit),
+			},
+		});
+	} catch (error) {
+		console.error("Error finding organization donations:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch organization donations",
+			error: error instanceof Error ? error.message : "Unknown error",
 		});
 	}
 };

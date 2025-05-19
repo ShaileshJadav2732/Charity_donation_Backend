@@ -1,7 +1,7 @@
 import express from "express";
 import {
 	getCauses,
-// getCauseDetails,
+	// getCauseDetails,
 	createCause,
 	updateCause,
 	deleteCause,
@@ -22,7 +22,7 @@ router.get("/:causeId", getCauseById);
 
 // Protected routes - Organization only
 router.post("/", authenticate, authorize(["organization"]), createCause);
-router.put("/:causeId", authenticate, authorize(["organization"]), updateCause);
+router.put("/:id", authenticate, authorize(["organization"]), updateCause);
 router.delete(
 	"/:causeId",
 	authenticate,
