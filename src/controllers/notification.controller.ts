@@ -1,109 +1,94 @@
-import { Request, Response } from "express";
-import Notification, { NotificationType } from "../models/notification.model";
-
-interface CreateNotificationParams {
-	recipient: string;
-	type: NotificationType;
-	title: string;
-	message: string;
-	data?: Record<string, any>;
+import { Request, Response } from 'express';
+import mongoose from 'mongoose';
+import Notification from '../models/notification.model'; // Adjust path
+import { IUser } from 'types';
+interface AuthRequest extends Request {
+	user?: IUser;
 }
 
-// Create notification (internal function)
-export const createNotification = async (params: CreateNotificationParams) => {
-	try {
-		const notification = await Notification.create(params);
-		return notification;
-	} catch (error) {
-		console.error("Error creating notification:", error);
-		throw error;
-	}
-};
 
-// Get user's notifications
-export const getUserNotifications = async (req: Request, res: Response) => {
+// Get notifications for a user
+export const getNotifications = async (req: AuthRequest & { params: { userId: string }, query: { limit?: string, unreadOnly?: string } }, res: Response) => {
 	try {
-		const { page = 1, limit = 20, unreadOnly = false } = req.query;
-		const query = {
-			recipient: req.user!._id,
-			...(unreadOnly === "true" && { isRead: false }),
-		};
+		const { userId } = req.params;
+		const { limit = '50', unreadOnly = 'false' } = req.query;
+		console.log("userId", userId);
+		if (!mongoose.Types.ObjectId.isValid(userId)) {
+			return res.status(400).json({ success: false, message: 'Invalid user ID' });
+		}
+		if (!req.user?._id || req.user._id.toString() !== userId) {
+			return res.status(403).json({ success: false, message: 'Unauthorized access' });
+		}
+
+		const query: { recipient: string; isRead?: boolean } = { recipient: userId };
+		if (unreadOnly === 'true') {
+			query.isRead = false;
+		}
 
 		const notifications = await Notification.find(query)
 			.sort({ createdAt: -1 })
-			.skip((Number(page) - 1) * Number(limit))
-			.limit(Number(limit));
+			.limit(parseInt(limit as string, 10));
 
-		const total = await Notification.countDocuments(query);
-		const unreadCount = await Notification.countDocuments({
-			recipient: req.user!._id,
-			isRead: false,
-		});
-
-		res.status(200).json({
-			success: true,
-			data: notifications,
-			unreadCount,
-			pagination: {
-				page: Number(page),
-				limit: Number(limit),
-				total,
-				pages: Math.ceil(total / Number(limit)),
-			},
-		});
+		res.status(200).json({ success: true, notifications });
 	} catch (error: any) {
-		res.status(400).json({
+		console.error('Error fetching notifications:', error);
+		res.status(500).json({
 			success: false,
-			error: error.message,
+			message: 'Error fetching notifications',
+			error: error?.message || 'Unknown error occurred',
 		});
 	}
 };
 
-// Mark notifications as read
-export const markNotificationsAsRead = async (req: Request, res: Response) => {
+// Mark a notification as read
+export const markNotificationAsRead = async (req: AuthRequest & { params: { notificationId: string } }, res: Response) => {
 	try {
-		const { notificationIds } = req.body;
-
-		await Notification.updateMany(
-			{
-				_id: { $in: notificationIds },
-				recipient: req.user!._id,
-			},
-			{
-				$set: { isRead: true },
-			}
-		);
-
-		res.status(200).json({
-			success: true,
-			message: "Notifications marked as read",
-		});
+		const { notificationId } = req.params;
+		if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+			return res.status(400).json({ success: false, message: 'Invalid notification ID' });
+		}
+		const notification = await Notification.findById(notificationId);
+		if (!notification) {
+			return res.status(404).json({ success: false, message: 'Notification not found' });
+		}
+		if (!req.user?._id || req.user._id.toString() !== notification.recipient.toString()) {
+			return res.status(403).json({ success: false, message: 'Unauthorized access' });
+		}
+		notification.isRead = true;
+		await notification.save();
+		res.status(200).json({ success: true, notification });
 	} catch (error: any) {
-		res.status(400).json({
+		console.error('Error marking notification as read:', error);
+		res.status(500).json({
 			success: false,
-			error: error.message,
+			message: 'Error marking notification as read',
+			error: error?.message || 'Unknown error occurred',
 		});
 	}
 };
 
-// Delete notifications
-export const deleteNotifications = async (req: Request, res: Response) => {
+// Dismiss (delete) a notification
+export const dismissNotification = async (req: AuthRequest & { params: { notificationId: string } }, res: Response) => {
 	try {
-		const { notificationIds } = req.body;
-
-		await Notification.deleteMany({
-			_id: { $in: notificationIds },
-			recipient: req.user!._id,
-		});
-
-		res.status(200).json({
-			success: true,
-			message: "Notifications deleted successfully",
-		});
+		const { notificationId } = req.params;
+		if (!mongoose.Types.ObjectId.isValid(notificationId)) {
+			return res.status(400).json({ success: false, message: 'Invalid notification ID' });
+		}
+		const notification = await Notification.findById(notificationId);
+		if (!notification) {
+			return res.status(404).json({ success: false, message: 'Notification not found' });
+		}
+		if (!req.user?._id || req.user._id.toString() !== notification.recipient.toString()) {
+			return res.status(403).json({ success: false, message: 'Unauthorized access' });
+		}
+		await notification.deleteOne();
+		res.status(200).json({ success: true, notification });
 	} catch (error: any) {
-		res.status(400).json({
+		console.error('Error dismissing notification:', error);
+		res.status(500).json({
 			success: false,
-			error: error.message,
+			message: 'Error dismissing notification',
+			error: error?.message || 'Unknown error occurred',
 		});
 	}
 };

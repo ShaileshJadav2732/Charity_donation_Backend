@@ -21,39 +21,23 @@ export interface INotification extends Document {
 	updatedAt: Date;
 }
 
-const NotificationSchema: Schema = new Schema(
+const NotificationSchema: Schema<INotification> = new Schema(
 	{
-		recipient: {
-			type: Schema.Types.ObjectId,
-			ref: "User",
-			required: [true, "Recipient is required"],
-		},
+		recipient: { type: Schema.Types.ObjectId, ref: "User", required: true },
 		type: {
 			type: String,
 			enum: Object.values(NotificationType),
-			required: [true, "Notification type is required"],
+			required: true,
 		},
-		title: {
-			type: String,
-			required: [true, "Title is required"],
-			trim: true,
-		},
-		message: {
-			type: String,
-			required: [true, "Message is required"],
-			trim: true,
-		},
-		data: {
-			type: Schema.Types.Mixed,
-			default: {},
-		},
-		isRead: {
-			type: Boolean,
-			default: false,
-		},
+		title: { type: String, required: true },
+		message: { type: String, required: true },
+		data: { type: Schema.Types.Mixed, default: {} },
+		isRead: { type: Boolean, default: false },
+		createdAt: { type: Date, default: Date.now },
+		updatedAt: { type: Date, default: Date.now },
 	},
 	{
-		timestamps: true,
+		timestamps: true, // Automatically manages createdAt and updatedAt
 	}
 );
 
@@ -62,13 +46,17 @@ NotificationSchema.index({ recipient: 1, isRead: 1 });
 NotificationSchema.index({ recipient: 1, type: 1 });
 NotificationSchema.index({ createdAt: -1 });
 
-// Add TTL index to automatically delete old notifications after 30 days
+// Add TTL index to automatically delete notifications after 30 days
 NotificationSchema.index(
 	{ createdAt: 1 },
 	{ expireAfterSeconds: 30 * 24 * 60 * 60 }
 );
 
-export default mongoose.model<INotification>(
-	"Notification",
-	NotificationSchema
-);
+// Pre-save hook to update updatedAt
+NotificationSchema.pre("save", function (next) {
+	this.updatedAt = new Date();
+	next();
+});
+
+const Notification = mongoose.model<INotification>("Notification", NotificationSchema);
+export default Notification;

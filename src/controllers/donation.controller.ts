@@ -11,7 +11,7 @@ import { sendEmail } from "../utils/email";
 import { validateObjectId } from "../utils/validation";
 import { sendDonationStatusNotification } from "../utils/notification";
 import { IUser } from "../types";
-
+import Notification, { NotificationType } from "../models/notification.model";
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {
@@ -304,11 +304,7 @@ export const cancelDonation = async (req: AuthRequest, res: Response) => {
 		await donation.save();
 
 		// Send cancellation notification
-		await sendEmail({
-			to: donation.contactEmail,
-			subject: "Donation Cancelled",
-			text: `Your donation has been cancelled. If you have any questions, please contact us.`,
-		});
+
 
 		res.status(200).json({
 			success: true,
@@ -435,7 +431,6 @@ export const findOrganizationPendingDonations = async (
 		});
 	}
 };
-
 export const updateDonationStatus = async (req: Request, res: Response) => {
 	try {
 		// Check if user is authenticated
@@ -477,7 +472,7 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 		const donation = await Donation.findById(donationId)
 			.populate<{ donor: IUser }>("donor", "name email")
 			.populate("cause", "title")
-			.populate("organization", "_id name"); // Populate organization to verify ownership
+			.populate("organization", "_id name");
 
 		console.log("donnnnnnnnation", donation?.organization._id);
 		if (!donation) {
@@ -487,7 +482,7 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Verify organization ownership (assuming user is linked to organization)
+		// Verify organization ownership
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
 		});
@@ -508,22 +503,75 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			});
 		}
 
+		console.log(
+			"mail data---------",
+			"jshailesh798@gmail.com",
+			donation._id.toString(),
+			status,
+			donation.amount,
+			donation.quantity,
+			donation.unit
+		);
 		// Update donation status
 		donation.status = status;
 
-		// // Add confirmation date if status is COMPLETED
-		// if (status === DonationStatus.COMPLETED) {
-		// 	donation.confirmationDate = new Date();
-		// }
-
 		// Save the updated donation
 		await donation.save();
+
+		// Send email notification to donor
+		let emailStatus = "No email sent";
+		if (donation.donor?.email) {
+			try {
+				await sendEmail(
+					donation.donor.email,
+					donation._id.toString(),
+					status,
+					donation.amount,
+					donation.quantity,
+					donation.unit
+				);
+				emailStatus = "Email sent successfully";
+			} catch (emailError) {
+				console.error(`Failed to send email for donation ${donationId}:`, emailError);
+				emailStatus = "Failed to send email";
+			}
+		} else {
+			console.warn(`No email provided for donor of donation ${donationId}`);
+			emailStatus = "No donor email provided";
+		}
+
+		let notificationStatus = "No notification created";
+		if (donation.donor?._id) {
+			try {
+				await Notification.create({
+					recipient: donation.donor._id, // Changed from userId to recipient to match schema
+					type: NotificationType.DONATION_STATUS_UPDATED, // Use the enum from NotificationType
+					title: `Donation Status Update`, // Added required title field
+					message: `Your donation (ID: ${donation._id}) has been updated to ${status}.`,
+					isRead: false, // Changed from status: "UNREAD" to isRead: false to match schema
+					data: { donationId: donation._id, status }, // Optional: include additional data
+				});
+				console.log(`Notification created for donor ${donation.donor._id}`);
+				notificationStatus = "Notification created successfully";
+			} catch (notificationError) {
+				console.error(
+					`Failed to create notification for donation ${donationId}:`,
+					notificationError
+				);
+				notificationStatus = "Failed to create notification";
+			}
+		} else {
+			console.warn(`No donor ID provided for donation ${donationId}`);
+			notificationStatus = "No donor ID provided";
+		}
 
 		// Return the updated donation
 		res.status(200).json({
 			success: true,
 			data: donation,
 			message: `Donation status updated to ${status}`,
+			emailStatus,
+			notificationStatus, // Include notificationStatus in response for clarity
 		});
 	} catch (error: any) {
 		console.error("Error updating donation status:", error);

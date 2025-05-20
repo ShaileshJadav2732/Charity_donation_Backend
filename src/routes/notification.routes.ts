@@ -1,23 +1,16 @@
-import express from "express";
-import {
-	getUserNotifications,
-	markNotificationsAsRead,
-	deleteNotifications,
-} from "../controllers/notification.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import express, { Router } from 'express';
+import { getNotifications, markNotificationAsRead, dismissNotification } from '../controllers/notification.controller'; // Adjust path
+import { authenticate } from '../middleware/auth.middleware'; // Adjust path
 
-const router = express.Router();
+const router: Router = express.Router();
 
-// All routes require authentication
-router.use(authenticate);
+// Fetch notifications
+router.get('/:userId', authenticate, getNotifications);
 
-// Get user's notifications
-router.get("/", getUserNotifications);
+// Mark notification as read
+router.patch('/:notificationId/read', authenticate, markNotificationAsRead);
 
-// Mark notifications as read
-router.patch("/read", markNotificationsAsRead);
-
-// Delete notifications
-router.delete("/", deleteNotifications);
+// Dismiss notification
+router.delete('/:notificationId', authenticate, dismissNotification);
 
 export default router;
