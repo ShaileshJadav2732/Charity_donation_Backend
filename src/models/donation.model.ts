@@ -14,8 +14,7 @@ export enum DonationType {
 
 export enum DonationStatus {
 	PENDING = "PENDING",
-	SCHEDULED = "SCHEDULED",
-	IN_TRANSIT = "IN_TRANSIT",
+	APPROVED = "APPROVED",
 	RECEIVED = "RECEIVED",
 	CONFIRMED = "CONFIRMED",
 	CANCELLED = "CANCELLED",

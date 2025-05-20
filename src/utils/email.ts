@@ -1,33 +1,57 @@
 import nodemailer from "nodemailer";
 
-interface EmailOptions {
-	to: string;
-	subject: string;
-	text: string;
-	html?: string;
-}
-
+// Initialize transporter with connection pooling
 const transporter = nodemailer.createTransport({
-	host: process.env.SMTP_HOST,
-	port: Number(process.env.SMTP_PORT),
-	secure: process.env.SMTP_SECURE === "true",
+	host: process.env.SMTP_HOST || "smtp.example.com",
+	port: parseInt(process.env.SMTP_PORT || "465"),
+	secure: true,
+	pool: true, // Enable connection pooling
+	maxConnections: 5, // Maximum simultaneous connections
+	maxMessages: 100, // Maximum messages per connection
 	auth: {
 		user: process.env.SMTP_USER,
 		pass: process.env.SMTP_PASS,
 	},
 });
 
-export const sendEmail = async (options: EmailOptions): Promise<void> => {
+// Function to send donation status email
+export const sendDonationStatusEmail = async (
+	to: string,
+	donationId: string,
+	status: string,
+	amount?: number,
+	quantity?: number,
+	unit?: string
+) => {
+	const subject = `Donation Status Update: ${status}`;
+	const text = `
+    Dear Donor,
+
+    Your donation (ID: ${donationId}) has been updated to "${status}".
+    ${
+			amount
+				? `Amount: $${amount.toFixed(2)}`
+				: `Quantity: ${quantity} ${unit || ""}`
+		}
+
+    Thank you for your generous support!
+
+    Best regards,
+    Your Organization
+  `;
+
+	const mailOptions = {
+		from: process.env.EMAIL_FROM || "Donations <noreply@example.com>",
+		to,
+		subject,
+		text,
+	};
+
 	try {
-		await transporter.sendMail({
-			from: process.env.SMTP_FROM,
-			to: options.to,
-			subject: options.subject,
-			text: options.text,
-			html: options.html,
-		});
+		await transporter.sendMail(mailOptions);
+		console.log(`Email sent to ${to} for donation ${donationId}`);
 	} catch (error) {
-		console.error("Email sending failed:", error);
-		throw new Error("Failed to send email");
+		console.error(`Error sending email to ${to}:`, error);
+		throw new Error("Failed to send notification email");
 	}
 };

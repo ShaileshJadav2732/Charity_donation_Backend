@@ -18,10 +18,15 @@ const router = express.Router();
 // Public routes
 router.get("/", getCauses);
 router.get("/active-campaigns", getActiveCampaignCauses);
-router.get("/:causeId", getCauseById);
 
 // Protected routes - Organization only
 router.post("/", authenticate, authorize(["organization"]), createCause);
+router.get(
+	"/organization/:organizationId",
+	authorize(["organization"]),
+	getOrganizationCauses
+);
+router.get("/:causeId", authorize(["organization"]), getCauseById);
 router.put("/:id", authenticate, authorize(["organization"]), updateCause);
 router.delete(
 	"/:causeId",
@@ -31,7 +36,6 @@ router.delete(
 );
 
 // Organization routes
-router.get("/organization/:organizationId", getOrganizationCauses);
 
 // Donor routes
 router.get("/donor/supported", getDonorCauses);
