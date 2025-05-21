@@ -6,11 +6,12 @@ export interface IUser extends Document {
 	name: string;
 	email: string;
 	password: string;
-	role: "user" | "organization" | "admin";
+	role: "donor" | "organization" | "admin";
 	phone?: string;
 	address?: string;
 	createdAt: Date;
 	updatedAt: Date;
+	profileCompleted: boolean;
 }
 
 export interface IDonorProfile {

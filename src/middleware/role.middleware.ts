@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AuthRequest } from "./auth.middleware";
+import { AuthRequest } from "../types";
 
 // Middleware to check if user has required role
 export const authorize = (roles: string[]) => {

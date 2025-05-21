@@ -2,40 +2,34 @@ import { DonationStatus } from "../models/donation.model";
 import { sendEmail } from "./email";
 
 export const sendDonationStatusNotification = async (
-   email: string,
-   donationId: string,
-   status: DonationStatus,
-   userName: string
+	email: string,
+	donationId: string,
+	status: DonationStatus,
+	userName: string
 ) => {
-   const subject = `Donation Status Update - ${status}`;
-   let message = `Dear ${userName},\n\n`;
+	const subject = `Donation Status Update - ${status}`;
+	let message = `Dear ${userName},\n\n`;
 
-   switch (status) {
-      case DonationStatus.SCHEDULED:
-         message += `Your donation (ID: ${donationId}) has been scheduled for pickup/delivery.`;
-         break;
-      case DonationStatus.IN_TRANSIT:
-         message += `Your donation (ID: ${donationId}) is now in transit.`;
-         break;
-      case DonationStatus.RECEIVED:
-         message += `Your donation (ID: ${donationId}) has been received by the organization.`;
-         break;
-      case DonationStatus.CONFIRMED:
-         message += `Your donation (ID: ${donationId}) has been confirmed and processed.`;
-         break;
-      case DonationStatus.CANCELLED:
-         message += `Your donation (ID: ${donationId}) has been cancelled.`;
-         break;
-      default:
-         message += `The status of your donation (ID: ${donationId}) has been updated to ${status}.`;
-   }
+	switch (status) {
+		case DonationStatus.RECEIVED:
+			message += `Your donation (ID: ${donationId}) has been received by the organization.`;
+			break;
+		case DonationStatus.CONFIRMED:
+			message += `Your donation (ID: ${donationId}) has been confirmed and processed.`;
+			break;
+		case DonationStatus.CANCELLED:
+			message += `Your donation (ID: ${donationId}) has been cancelled.`;
+			break;
+		default:
+			message += `The status of your donation (ID: ${donationId}) has been updated to ${status}.`;
+	}
 
-   message += `\n\nThank you for your contribution!\nBest regards,\nThe Charity Donation Team`;
+	message += `\n\nThank you for your contribution!\nBest regards,\nThe Charity Donation Team`;
 
-   try {
-      await sendEmail(email, subject, message);
-   } catch (error) {
-      console.error('Error sending donation status notification:', error);
-      // Don't throw the error as this is a non-critical operation
-   }
-}; 
+	try {
+		await sendEmail(email, subject, message);
+	} catch (error) {
+		console.error("Error sending donation status notification:", error);
+		// Don't throw the error as this is a non-critical operation
+	}
+};
