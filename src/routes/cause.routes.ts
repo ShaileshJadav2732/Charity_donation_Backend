@@ -26,7 +26,8 @@ router.get(
 	authorize(["organization"]),
 	getOrganizationCauses
 );
-router.get("/:causeId", authorize(["organization"]), getCauseById);
+// Make cause details accessible to all authenticated users
+router.get("/:id", getCauseById);
 router.put("/:id", authenticate, authorize(["organization"]), updateCause);
 router.delete(
 	"/:causeId",

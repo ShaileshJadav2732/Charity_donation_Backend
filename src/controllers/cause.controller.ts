@@ -9,6 +9,11 @@ import { AppError } from "../utils/appError";
 import { IUser } from "../types";
 import { validateObjectId } from "../utils/validation";
 
+// Extended Request interface with user property
+interface RequestWithUser extends Request {
+	user?: any; // Using any for now, but ideally should match your user type
+}
+
 interface AuthRequest extends Request {
 	user?: IUser;
 }
@@ -68,38 +73,40 @@ export const getCauses = catchAsync(async (req: Request, res: Response) => {
 });
 
 // Get a single cause by ID
-export const getCauseById = catchAsync(async (req: Request, res: Response) => {
-	// const causeId = req.params.id;
-	const cause = await Cause.findById(req.params.causeId);
+export const getCauseById = catchAsync(async (req: RequestWithUser, res: Response) => {
+	const causeId = req.params.id;
+	console.log(`[getCauseById] Request received for cause ID: ${causeId}`);
+	console.log(`[getCauseById] Request user:`, req.user);
 
-	if (!cause) {
-		throw new AppError("Cause not found", 404);
+	if (!mongoose.Types.ObjectId.isValid(causeId)) {
+		console.log(`[getCauseById] Invalid cause ID format: ${causeId}`);
+		throw new AppError("Invalid cause ID", 400);
 	}
 
-	res.status(200).json({
-		cause: formatCauseResponse(cause),
-	});
+	try {
+		const cause = await Cause.findById(causeId).populate(
+			"organizationId",
+			"name"
+		);
+
+		if (!cause) {
+			console.log(`[getCauseById] Cause not found with ID: ${causeId}`);
+			throw new AppError("Cause not found", 404);
+		}
+
+		console.log(`[getCauseById] Successfully found cause: ${cause.title}`);
+
+		const formattedCause = formatCauseResponse(cause);
+		console.log(`[getCauseById] Formatted cause:`, formattedCause);
+
+		res.status(200).json({
+			cause: formattedCause,
+		});
+	} catch (error) {
+		console.error(`[getCauseById] Error finding cause:`, error);
+		throw error;
+	}
 });
-// export const getCauseById = catchAsync(async (req: Request, res: Response) => {
-// 	const causeId = req.params.id;
-
-// 	if (!mongoose.Types.ObjectId.isValid(causeId)) {
-// 		throw new AppError("Invalid cause ID", 400);
-// 	}
-
-// 	const cause = await Cause.findById(req.params.causeId).populate(
-// 		"organizationId",
-// 		"name"
-// 	);
-
-// 	if (!cause) {
-// 		throw new AppError("Cause not found", 404);
-// 	}
-
-// 	res.status(200).json({
-// 		cause: formatCauseResponse(cause),
-// 	});
-// });
 // Create a new cause (organization only)
 
 export const createCause = catchAsync(
@@ -202,8 +209,15 @@ export const deleteCause = catchAsync(
 			throw new AppError("Cause not found", 404);
 		}
 
+		// Find the organization based on the logged-in user's ID
+		const organization = await Organization.findOne({ userId: req.user._id });
+
+		if (!organization) {
+			throw new AppError("Organization not found for the logged-in user", 404);
+		}
+
 		// Check if user's organization owns the cause
-		if (!cause.organizationId.equals(req.user._id)) {
+		if (!cause.organizationId.equals(organization._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to delete this cause",
 				403
@@ -360,11 +374,15 @@ export const getActiveCampaignCauses = catchAsync(
 			);
 
 			// Extract all cause IDs from active campaigns
-			const activeCausesIds = new Set();
+			const activeCausesIds = new Set<string>();
 			activeCampaigns.forEach((campaign) => {
-				campaign.causes.forEach((causeId: mongoose.Types.ObjectId) => {
-					activeCausesIds.add(causeId.toString());
-				});
+				if (Array.isArray(campaign.causes)) {
+					campaign.causes.forEach((causeId: mongoose.Types.ObjectId | null) => {
+						if (causeId) {
+							activeCausesIds.add(causeId.toString());
+						}
+					});
+				}
 			});
 
 			console.log(
