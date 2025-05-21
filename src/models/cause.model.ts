@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
+import { DonationType } from "./donation.model";
 
 export interface ICause extends Document {
 	title: string;
@@ -8,6 +9,9 @@ export interface ICause extends Document {
 	imageUrl: string;
 	tags: string[];
 	organizationId: mongoose.Types.ObjectId;
+	acceptanceType: "money" | "items" | "both";
+	donationItems: string[];
+	acceptedDonationTypes: DonationType[];
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -49,6 +53,34 @@ const CauseSchema: Schema = new Schema(
 			ref: "Organization",
 			required: [true, "Organization is required"],
 		},
+		acceptanceType: {
+			type: String,
+			enum: ["money", "items", "both"],
+			default: "money",
+		},
+		donationItems: [
+			{
+				type: String,
+				trim: true,
+			},
+		],
+		acceptedDonationTypes: [
+			{
+				type: String,
+				enum: [
+					"MONEY",
+					"CLOTHES",
+					"BLOOD",
+					"FOOD",
+					"TOYS",
+					"BOOKS",
+					"FURNITURE",
+					"HOUSEHOLD",
+					"OTHER",
+				],
+				default: ["MONEY"],
+			},
+		],
 	},
 	{
 		timestamps: true,

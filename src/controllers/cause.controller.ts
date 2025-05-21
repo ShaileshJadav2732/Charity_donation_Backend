@@ -32,6 +32,9 @@ const formatCauseResponse = (cause: any) => ({
 		cause.organizationId?.toString() ||
 		"",
 	organizationName: cause.organizationId?.name || "",
+	acceptanceType: cause.acceptanceType || "money",
+	donationItems: cause.donationItems || [],
+	acceptedDonationTypes: cause.acceptedDonationTypes || ["MONEY"],
 	createdAt: cause.createdAt.toISOString(),
 	updatedAt: cause.updatedAt.toISOString(),
 });
@@ -115,7 +118,16 @@ export const createCause = catchAsync(
 			throw new AppError("Unauthorized: Authentication required", 401);
 		}
 
-		const { title, description, targetAmount, imageUrl, tags } = req.body;
+		const {
+			title,
+			description,
+			targetAmount,
+			imageUrl,
+			tags,
+			acceptanceType,
+			donationItems,
+			acceptedDonationTypes
+		} = req.body;
 
 		// Validate required fields
 		if (!title || !description || targetAmount === undefined || !imageUrl) {
@@ -133,6 +145,38 @@ export const createCause = catchAsync(
 			throw new AppError("Organization not found for the logged-in user", 404);
 		}
 
+		// Determine the acceptance type and donation items based on input
+		const finalAcceptanceType = acceptanceType || "money";
+		let finalDonationItems = [];
+		let finalAcceptedDonationTypes = ["MONEY"];
+
+		if (finalAcceptanceType === "items" || finalAcceptanceType === "both") {
+			finalDonationItems = donationItems || [];
+
+			if (acceptedDonationTypes && acceptedDonationTypes.length > 0) {
+				finalAcceptedDonationTypes = finalAcceptanceType === "both"
+					? ["MONEY", ...acceptedDonationTypes.filter((type: string) => type !== "MONEY")]
+					: acceptedDonationTypes;
+			} else if (finalDonationItems.length > 0) {
+				// If no acceptedDonationTypes provided but donationItems exist, infer types
+				const inferredTypes = finalDonationItems.map((item: string) => {
+					switch (item.toUpperCase()) {
+						case 'CLOTHES': return "CLOTHES";
+						case 'BOOKS': return "BOOKS";
+						case 'TOYS': return "TOYS";
+						case 'FOOD': return "FOOD";
+						case 'FURNITURE': return "FURNITURE";
+						case 'HOUSEHOLD ITEMS': return "HOUSEHOLD";
+						default: return "OTHER";
+					}
+				});
+
+				finalAcceptedDonationTypes = finalAcceptanceType === "both"
+					? ["MONEY", ...inferredTypes]
+					: inferredTypes;
+			}
+		}
+
 		//  Use organization._id as the reference
 		const cause = await Cause.create({
 			title,
@@ -141,6 +185,9 @@ export const createCause = catchAsync(
 			imageUrl,
 			tags: tags || [],
 			organizationId: organization._id,
+			acceptanceType: finalAcceptanceType,
+			donationItems: finalDonationItems,
+			acceptedDonationTypes: finalAcceptedDonationTypes,
 		});
 
 		await cause.populate("organizationId", "name");
@@ -169,13 +216,62 @@ export const updateCause = catchAsync(
 			throw Error("User Is not Authenticated ");
 		}
 
-		const { title, description, targetAmount, imageUrl, tags } = req.body;
+		const {
+			title,
+			description,
+			targetAmount,
+			imageUrl,
+			tags,
+			acceptanceType,
+			donationItems,
+			acceptedDonationTypes
+		} = req.body;
 
 		// Validate targetAmount if provided
 		if (targetAmount !== undefined && targetAmount <= 0) {
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
 		const cause = causeId;
+
+		// Process donation-related fields
+		let finalAcceptanceType = acceptanceType;
+		let finalDonationItems = donationItems;
+		let finalAcceptedDonationTypes = acceptedDonationTypes;
+
+		// If acceptanceType is provided, update related fields accordingly
+		if (finalAcceptanceType) {
+			if (finalAcceptanceType === "money") {
+				// For money-only, clear item-related fields
+				finalDonationItems = [];
+				finalAcceptedDonationTypes = ["MONEY"];
+			} else if (finalAcceptanceType === "items" || finalAcceptanceType === "both") {
+				// For items or both, ensure we have the right donation types
+				if (finalDonationItems && finalDonationItems.length > 0) {
+					// If donationItems provided but no acceptedDonationTypes, infer them
+					if (!finalAcceptedDonationTypes || finalAcceptedDonationTypes.length === 0) {
+						const inferredTypes = finalDonationItems.map((item: string) => {
+							switch (item.toUpperCase()) {
+								case 'CLOTHES': return "CLOTHES";
+								case 'BOOKS': return "BOOKS";
+								case 'TOYS': return "TOYS";
+								case 'FOOD': return "FOOD";
+								case 'FURNITURE': return "FURNITURE";
+								case 'HOUSEHOLD ITEMS': return "HOUSEHOLD";
+								default: return "OTHER";
+							}
+						});
+
+						finalAcceptedDonationTypes = finalAcceptanceType === "both"
+							? ["MONEY", ...inferredTypes]
+							: inferredTypes;
+					} else if (finalAcceptanceType === "both" && !finalAcceptedDonationTypes.includes("MONEY")) {
+						// Ensure MONEY is included for "both" type
+						finalAcceptedDonationTypes = ["MONEY", ...finalAcceptedDonationTypes];
+					}
+				}
+			}
+		}
+
 		// Update fields
 		cause.set({
 			title: title || cause.title,
@@ -184,6 +280,9 @@ export const updateCause = catchAsync(
 				targetAmount !== undefined ? targetAmount : cause.targetAmount,
 			imageUrl: imageUrl || cause.imageUrl,
 			tags: tags || cause.tags,
+			...(finalAcceptanceType && { acceptanceType: finalAcceptanceType }),
+			...(finalDonationItems && { donationItems: finalDonationItems }),
+			...(finalAcceptedDonationTypes && { acceptedDonationTypes: finalAcceptedDonationTypes }),
 		});
 
 		await cause.save();
