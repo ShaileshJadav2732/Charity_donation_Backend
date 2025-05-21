@@ -23,6 +23,8 @@ export enum DonationStatus {
 export interface IDonation extends Document {
 	donor: mongoose.Types.ObjectId;
 	organization: mongoose.Types.ObjectId;
+	campaign?: mongoose.Types.ObjectId;
+	cause?: mongoose.Types.ObjectId;
 	type: DonationType;
 	status: DonationStatus;
 	amount?: number; // For monetary donations
