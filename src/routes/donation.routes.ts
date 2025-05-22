@@ -1,15 +1,18 @@
 import express from "express";
 import {
+	confirmDonationReceipt,
 	createDonation,
 	findOrganizationPendingDonations,
 	getDonorDonations,
 	getDonorStats,
 	getItemDonationAnalytics,
 	getItemDonationTypeAnalytics,
+	markDonationAsReceived,
 	updateDonationStatus,
 } from "../controllers/donation.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
+import { uploadDonationPhoto } from "../middleware/upload.middleware";
 
 const router = express.Router();
 // All routes require authentication
@@ -39,5 +42,22 @@ router.get("/items/:type/analytics", getItemDonationTypeAnalytics);
 
 // Update donation status
 router.patch("/:donationId/status", authenticate, updateDonationStatus);
+
+// Mark donation as received with photo upload
+router.patch(
+	"/:donationId/received",
+	authenticate,
+	authorize(["organization"]),
+	uploadDonationPhoto,
+	markDonationAsReceived
+);
+
+// Confirm donation receipt by donor
+router.patch(
+	"/:donationId/confirm",
+	authenticate,
+	authorize(["donor"]),
+	confirmDonationReceipt
+);
 
 export default router;
