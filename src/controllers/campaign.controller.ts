@@ -446,65 +446,6 @@ export const updateCampaign = catchAsync(
 	}
 );
 
-// Update campaign status
-export const updateCampaignStatus = catchAsync(
-	async (req: AuthRequest, res: Response) => {
-		if (!req.user || req.user.role !== "organization") {
-			throw new AppError(
-				"Unauthorized: Only organizations can update campaign status",
-				403
-			);
-		}
-
-		const { campaignId } = req.params;
-		const { status } = req.body;
-
-		if (!validateObjectId(campaignId)) {
-			throw new AppError("Invalid campaign ID", 400);
-		}
-
-		const campaign = await Campaign.findById(campaignId);
-
-		if (!campaign) {
-			throw new AppError("Campaign not found", 404);
-		}
-
-		const userIdForStatus = req.user!._id;
-		if (
-			!campaign.organizations.some(
-				(orgId) => orgId.toString() === userIdForStatus
-			)
-		) {
-			throw new AppError(
-				"Unauthorized: You do not have permission to update this campaign",
-				403
-			);
-		}
-
-		const validStatuses = ["draft", "active", "completed", "cancelled"];
-		if (!validStatuses.includes(status)) {
-			throw new AppError("Invalid status", 400);
-		}
-
-		campaign.status = status;
-		await campaign.save();
-
-		await campaign.populate({
-			path: "causes",
-			select: "title description targetAmount raisedAmount",
-		});
-		await campaign.populate({
-			path: "organizations",
-			select: "name email phone",
-		});
-
-		res.status(200).json({
-			success: true,
-			data: formatCampaignResponse(campaign),
-		});
-	}
-);
-
 // Delete a campaign
 export const deleteCampaign = catchAsync(
 	async (req: AuthRequest, res: Response) => {

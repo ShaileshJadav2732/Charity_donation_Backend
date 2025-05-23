@@ -6,9 +6,8 @@ import Donation, {
 	DonationType,
 } from "../models/donation.model";
 import Organization from "../models/organization.model";
-import { AuthRequest } from "../types";
 import { sendEmail } from "../utils/email";
-import { validateObjectId } from "../utils/validation";
+import { generateDonationReceipt } from "../utils/pdfGenerator";
 import { IUser } from "../types";
 import Notification, { NotificationType } from "../models/notification.model";
 export const createDonation = async (req: Request, res: Response) => {
@@ -87,6 +86,7 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 
 		const donations = await Donation.find(query)
 			.populate("organization", "name email phone")
+			.populate("cause", "title")
 			.sort({ createdAt: -1 })
 			.skip((Number(page) - 1) * Number(limit))
 			.limit(Number(limit));
@@ -107,254 +107,6 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 			success: false,
 			message: "Error fetching donations",
 			error: error?.message || "Unknown error occurred",
-		});
-	}
-};
-
-export const getDonationDetails = async (req: Request, res: Response) => {
-	try {
-		if (!req.user?._id) {
-			return res.status(401).json({ message: "User not authenticated" });
-		}
-
-		const { donationId } = req.params;
-
-		if (!validateObjectId(donationId)) {
-			return res.status(400).json({ message: "Invalid donation ID" });
-		}
-
-		const donation = await Donation.findOne({
-			_id: donationId,
-			donor: req.user._id,
-		}).populate("organization", "name email phone address");
-
-		if (!donation) {
-			return res.status(404).json({ message: "Donation not found" });
-		}
-
-		res.status(200).json({
-			success: true,
-			data: donation,
-		});
-	} catch (error: any) {
-		res.status(500).json({
-			success: false,
-			message: "Error fetching donation details",
-			error: error?.message || "Unknown error occurred",
-		});
-	}
-};
-
-// export const updateDonationStatus = async (req: Request, res: Response) => {
-// 	try {
-// 		if (!req.user?._id) {
-// 			return res.status(401).json({ message: "User not authenticated" });
-// 		}
-
-// 		const { donationId } = req.params;
-// 		const { status } = req.body;
-
-// 		if (!validateObjectId(donationId)) {
-// 			return res.status(400).json({ message: "Invalid donation ID" });
-// 		}
-
-// 		// Find donation and check if user has permission
-// 		const donation = await Donation.findOne({
-// 			_id: donationId,
-// 			$or: [{ donor: req.user._id }, { organization: req.user._id }],
-// 		}).populate<{ donor: IUser }>("donor", "name email");
-
-// 		if (!donation) {
-// 			return res.status(404).json({ message: "Donation not found" });
-// 		}
-
-// 		// If user is donor, only allow cancellation
-// 		if (donation.donor.toString() === req.user._id.toString()) {
-// 			if (status !== DonationStatus.CANCELLED) {
-// 				return res.status(403).json({
-// 					message: "Donors can only cancel donations",
-// 				});
-// 			}
-// 		}
-
-// 		// If user is organization, allow all status updates except CANCELLED
-// 		if (donation.organization.toString() === req.user._id.toString()) {
-// 			if (status === DonationStatus.CANCELLED) {
-// 				return res.status(403).json({
-// 					message: "Organizations cannot cancel donations",
-// 				});
-// 			}
-// 		}
-
-// 		const oldStatus = donation.status;
-// 		donation.status = status;
-// 		await donation.save();
-
-// 		// Send notification to donor about status change
-// 		if (
-// 			donation.donor &&
-// 			typeof donation.donor === "object" &&
-// 			"email" in donation.donor
-// 		) {
-// 			await sendDonationStatusNotification(
-// 				donation.donor.email as string,
-// 				donationId,
-// 				status,
-// 				donation.donor.name
-// 			);
-// 		}
-
-// 		res.status(200).json({
-// 			success: true,
-// 			data: donation,
-// 			message: `Donation status updated from ${oldStatus} to ${status}`,
-// 		});
-// 	} catch (error: any) {
-// 		res.status(500).json({
-// 			success: false,
-// 			message: "Error updating donation status",
-// 			error: error?.message || "Unknown error occurred",
-// 		});
-// 	}
-// };
-
-export const getDonations = async (req: AuthRequest, res: Response) => {
-	try {
-		const { status, type, page = 1, limit = 10 } = req.query;
-		const query: any = {};
-
-		if (status) query.status = status;
-		if (type) query.type = type;
-
-		const donations = await Donation.find(query)
-			.populate("donor", "name email")
-			.populate("organization", "name email")
-			.sort({ createdAt: -1 })
-			.skip((Number(page) - 1) * Number(limit))
-			.limit(Number(limit));
-
-		const total = await Donation.countDocuments(query);
-
-		res.status(200).json({
-			success: true,
-			data: donations,
-			pagination: {
-				total,
-				page: Number(page),
-				pages: Math.ceil(total / Number(limit)),
-			},
-		});
-	} catch (error) {
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : "An error occurred",
-		});
-	}
-};
-
-export const getDonationById = async (req: AuthRequest, res: Response) => {
-	try {
-		const donation = await Donation.findById(req.params.id)
-			.populate("donor", "name email")
-			.populate("organization", "name email");
-
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				error: "Donation not found",
-			});
-		}
-
-		res.status(200).json({
-			success: true,
-			data: donation,
-		});
-	} catch (error) {
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : "An error occurred",
-		});
-	}
-};
-
-export const cancelDonation = async (req: AuthRequest, res: Response) => {
-	try {
-		const donation = await Donation.findById(req.params.id);
-
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				error: "Donation not found",
-			});
-		}
-
-		// Only donor or organization can cancel
-		if (
-			donation.donor.toString() !== req.user?.id &&
-			donation.organization.toString() !== req.user?.id
-		) {
-			return res.status(403).json({
-				success: false,
-				error: "Not authorized to cancel this donation",
-			});
-		}
-
-		// Store the previous status before updating
-		const previousStatus = donation.status;
-
-		// Update status to cancelled
-		donation.status = DonationStatus.CANCELLED;
-
-		// If the donation was previously confirmed or received and it's a monetary donation,
-		// subtract the amount from the cause's raisedAmount
-		if (
-			(previousStatus === DonationStatus.CONFIRMED ||
-				previousStatus === DonationStatus.RECEIVED) &&
-			donation.type === DonationType.MONEY &&
-			donation.amount &&
-			donation.cause
-		) {
-			// Find the cause and update its raisedAmount
-			const causeId = donation.cause;
-			const cause = await Cause.findById(causeId);
-			if (cause) {
-				// Ensure raisedAmount doesn't go below 0
-				cause.raisedAmount = Math.max(0, cause.raisedAmount - donation.amount);
-				await cause.save();
-				console.log(
-					`Updated cause ${cause._id} raisedAmount to ${cause.raisedAmount} after cancellation`
-				);
-			}
-		}
-
-		await donation.save();
-
-		// Send cancellation notification to the organization
-		if (donation.organization) {
-			try {
-				await Notification.create({
-					recipient: donation.organization,
-					type: NotificationType.DONATION_STATUS_UPDATED,
-					title: "Donation Cancelled",
-					message: `A donation (ID: ${donation._id}) has been cancelled.`,
-					isRead: false,
-					data: { donationId: donation._id, status: DonationStatus.CANCELLED },
-				});
-			} catch (notificationError) {
-				console.error(
-					`Failed to create cancellation notification: ${notificationError}`
-				);
-			}
-		}
-
-		res.status(200).json({
-			success: true,
-			data: donation,
-		});
-	} catch (error) {
-		res.status(400).json({
-			success: false,
-			error: error instanceof Error ? error.message : "An error occurred",
 		});
 	}
 };
@@ -1133,22 +885,60 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		}
 
 		// Check if the current status is APPROVED or PENDING
-		if (
-			donation.status !== DonationStatus.APPROVED &&
-			donation.status !== DonationStatus.PENDING
-		) {
+		if (donation.status !== DonationStatus.APPROVED) {
 			return res.status(400).json({
 				success: false,
-				message: "Only approved or pending donations can be marked as received",
+				message: "Only approved can be marked as received",
 			});
 		}
 
 		// Get the photo file path
 		const photoUrl = `/uploads/donation-photos/${req.file.filename}`;
 
+		// Generate PDF receipt automatically
+		let pdfReceiptUrl = "";
+		try {
+			const donationData = {
+				donationId: donation._id.toString(),
+				donorName: (donation.donor as any)?.name || "Anonymous Donor",
+				donorEmail: (donation.donor as any)?.email || "No email provided",
+				organizationName:
+					(donation.organization as any)?.name || "Organization",
+				organizationEmail:
+					(donation.organization as any)?.email || "No email provided",
+				amount: donation.amount,
+				quantity: donation.quantity,
+				unit: donation.unit,
+				type: donation.type,
+				description: donation.description || "No description provided",
+				receivedDate: new Date(),
+				cause: (donation.cause as any)?.title || undefined,
+			};
+
+			pdfReceiptUrl = await generateDonationReceipt(donationData);
+			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
+		} catch (pdfError) {
+			console.error("Failed to generate PDF receipt:", pdfError);
+			// Continue with the process even if PDF generation fails
+		}
+
 		// Update donation status and receipt image
 		donation.status = DonationStatus.RECEIVED;
 		donation.receiptImage = photoUrl;
+
+		// Store the PDF receipt URL if generated successfully
+		if (pdfReceiptUrl) {
+			donation.pdfReceiptUrl = pdfReceiptUrl;
+		}
+
+		// Store photo metadata for better tracking
+		donation.receiptImageMetadata = {
+			originalName: req.file.originalname,
+			mimeType: req.file.mimetype,
+			fileSize: req.file.size,
+			uploadedAt: new Date(),
+			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
+		};
 
 		// If it's a monetary donation, update the cause's raisedAmount
 		if (
@@ -1231,10 +1021,12 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		res.status(200).json({
 			success: true,
 			data: donation,
-			message: "Donation marked as received with photo",
+			message:
+				"Donation marked as received with photo and PDF receipt generated",
 			emailStatus,
 			notificationStatus,
 			photoUrl,
+			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
 		console.error("Error marking donation as received:", error);
@@ -1320,6 +1112,34 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 		// Save the updated donation
 		await donation.save();
 
+		// Send email notification to organization
+		let emailStatus = "No email sent";
+		const organizationData = donation.organization as any;
+		if (organizationData?.email) {
+			try {
+				await sendEmail(
+					organizationData.email,
+					donation._id.toString(),
+					DonationStatus.CONFIRMED,
+					donation.amount,
+					donation.quantity,
+					donation.unit
+				);
+				emailStatus = "Email sent successfully to organization";
+			} catch (emailError) {
+				console.error(
+					`Failed to send email to organization for donation ${donationId}:`,
+					emailError
+				);
+				emailStatus = "Failed to send email to organization";
+			}
+		} else {
+			console.warn(
+				`No email provided for organization of donation ${donationId}`
+			);
+			emailStatus = "No organization email provided";
+		}
+
 		// Create notification for organization
 		let notificationStatus = "No notification created";
 		if (donation.organization) {
@@ -1328,11 +1148,12 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 					recipient: donation.organization,
 					type: NotificationType.DONATION_STATUS_UPDATED,
 					title: "Donation Confirmed",
-					message: `A donation (ID: ${donation._id}) has been confirmed by the donor.`,
+					message: `A donation (ID: ${donation._id}) has been confirmed by the donor. The donation process is now complete.`,
 					isRead: false,
 					data: {
 						donationId: donation._id,
 						status: DonationStatus.CONFIRMED,
+						confirmationDate: donation.confirmationDate,
 					},
 				});
 				notificationStatus = "Notification created successfully";
@@ -1350,6 +1171,7 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 			success: true,
 			data: donation,
 			message: "Donation confirmed successfully",
+			emailStatus,
 			notificationStatus,
 		});
 	} catch (error: any) {
@@ -1357,6 +1179,167 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 		res.status(500).json({
 			success: false,
 			message: "Error confirming donation",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};
+
+// Mark donation as confirmed with receipt upload (for organizations)
+export const markDonationAsConfirmed = async (req: Request, res: Response) => {
+	try {
+		console.log("markDonationAsConfirmed called");
+		console.log("Request headers:", req.headers);
+		console.log("Request body:", req.body);
+		console.log("Request files:", req.file || "No file");
+		console.log("Request params:", req.params);
+
+		// Check if user is authenticated
+		if (!req.user?._id) {
+			console.error("User not authenticated");
+			return res.status(401).json({
+				success: false,
+				message: "User not authenticated",
+			});
+		}
+
+		// Get donation ID from request params
+		const { donationId } = req.params;
+
+		// Validate input
+		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
+			return res.status(400).json({
+				success: false,
+				message: "Valid donation ID is required",
+			});
+		}
+
+		// Check if file was uploaded
+		if (!req.file) {
+			return res.status(400).json({
+				success: false,
+				message: "Receipt file is required",
+			});
+		}
+
+		// Find the donation and populate necessary fields
+		const donation = await Donation.findById(donationId)
+			.populate("donor", "email")
+			.populate("organization", "name email");
+
+		if (!donation) {
+			return res.status(404).json({
+				success: false,
+				message: "Donation not found",
+			});
+		}
+
+		// Verify organization ownership
+		if (donation.organization._id.toString() !== req.user._id.toString()) {
+			return res.status(403).json({
+				success: false,
+				message: "You do not have permission to update this donation",
+			});
+		}
+
+		// Check if the current status is RECEIVED
+		if (donation.status !== DonationStatus.RECEIVED) {
+			return res.status(400).json({
+				success: false,
+				message: "Only received donations can be marked as confirmed",
+			});
+		}
+
+		// Get the receipt file path
+		const receiptUrl = `/uploads/receipts/${req.file.filename}`;
+
+		// Update donation status and receipt
+		donation.status = DonationStatus.CONFIRMED;
+		donation.receiptImage = receiptUrl;
+		donation.confirmationDate = new Date();
+
+		// Store receipt metadata for better tracking
+		donation.receiptImageMetadata = {
+			originalName: req.file.originalname,
+			mimeType: req.file.mimetype,
+			fileSize: req.file.size,
+			uploadedAt: new Date(),
+			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
+		};
+
+		// Save the updated donation
+		await donation.save();
+
+		// Send email notification to donor
+		let emailStatus = "No email sent";
+		const donorData = donation.donor as any;
+		if (donorData?.email) {
+			try {
+				await sendEmail(
+					donorData.email,
+					donation._id.toString(),
+					DonationStatus.CONFIRMED,
+					donation.amount,
+					donation.quantity,
+					donation.unit
+				);
+				emailStatus = "Email sent successfully to donor";
+			} catch (emailError) {
+				console.error(
+					`Failed to send email to donor for donation ${donationId}:`,
+					emailError
+				);
+				emailStatus = "Failed to send email to donor";
+			}
+		} else {
+			console.warn(`No email provided for donor of donation ${donationId}`);
+			emailStatus = "No donor email provided";
+		}
+
+		// Create notification for donor
+		let notificationStatus = "No notification created";
+		if (donation.donor?._id) {
+			try {
+				await Notification.create({
+					recipient: donation.donor._id,
+					type: NotificationType.DONATION_STATUS_UPDATED,
+					title: "Donation Confirmed - Receipt Available",
+					message: `Your donation (ID: ${donation._id}) has been confirmed and a receipt is now available for download.`,
+					isRead: false,
+					data: {
+						donationId: donation._id,
+						status: DonationStatus.CONFIRMED,
+						receiptUrl: receiptUrl,
+						confirmationDate: donation.confirmationDate,
+					},
+				});
+				console.log(`Notification created for donor ${donation.donor._id}`);
+				notificationStatus = "Notification created successfully";
+			} catch (notificationError) {
+				console.error(
+					`Failed to create notification for donation ${donationId}:`,
+					notificationError
+				);
+				notificationStatus = "Failed to create notification";
+			}
+		} else {
+			console.warn(`No donor ID provided for donation ${donationId}`);
+			notificationStatus = "No donor ID provided";
+		}
+
+		// Return the updated donation
+		res.status(200).json({
+			success: true,
+			data: donation,
+			message: "Donation marked as confirmed with receipt",
+			emailStatus,
+			notificationStatus,
+			receiptUrl,
+		});
+	} catch (error: any) {
+		console.error("Error marking donation as confirmed:", error);
+		res.status(500).json({
+			success: false,
+			message: "Error marking donation as confirmed",
 			error: error?.message || "Unknown error occurred",
 		});
 	}

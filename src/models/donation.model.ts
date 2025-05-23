@@ -51,6 +51,14 @@ export interface IDonation extends Document {
 	contactPhone: string;
 	contactEmail: string;
 	receiptImage?: string;
+	receiptImageMetadata?: {
+		originalName?: string;
+		mimeType?: string;
+		fileSize?: number;
+		uploadedAt?: Date;
+		uploadedBy?: mongoose.Types.ObjectId;
+	};
+	pdfReceiptUrl?: string;
 	confirmationDate?: Date;
 	notes?: string;
 	createdAt: Date;
@@ -150,6 +158,19 @@ const DonationSchema: Schema = new Schema(
 			required: true,
 		},
 		receiptImage: {
+			type: String,
+		},
+		receiptImageMetadata: {
+			originalName: String,
+			mimeType: String,
+			fileSize: Number,
+			uploadedAt: Date,
+			uploadedBy: {
+				type: Schema.Types.ObjectId,
+				ref: "User",
+			},
+		},
+		pdfReceiptUrl: {
 			type: String,
 		},
 		confirmationDate: {

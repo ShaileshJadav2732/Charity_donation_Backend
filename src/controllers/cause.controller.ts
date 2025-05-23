@@ -76,40 +76,42 @@ export const getCauses = catchAsync(async (req: Request, res: Response) => {
 });
 
 // Get a single cause by ID
-export const getCauseById = catchAsync(async (req: RequestWithUser, res: Response) => {
-	const causeId = req.params.id;
-	console.log(`[getCauseById] Request received for cause ID: ${causeId}`);
-	console.log(`[getCauseById] Request user:`, req.user);
+export const getCauseById = catchAsync(
+	async (req: RequestWithUser, res: Response) => {
+		const causeId = req.params.id;
+		console.log(`[getCauseById] Request received for cause ID: ${causeId}`);
+		console.log(`[getCauseById] Request user:`, req.user);
 
-	if (!mongoose.Types.ObjectId.isValid(causeId)) {
-		console.log(`[getCauseById] Invalid cause ID format: ${causeId}`);
-		throw new AppError("Invalid cause ID", 400);
-	}
-
-	try {
-		const cause = await Cause.findById(causeId).populate(
-			"organizationId",
-			"name"
-		);
-
-		if (!cause) {
-			console.log(`[getCauseById] Cause not found with ID: ${causeId}`);
-			throw new AppError("Cause not found", 404);
+		if (!mongoose.Types.ObjectId.isValid(causeId)) {
+			console.log(`[getCauseById] Invalid cause ID format: ${causeId}`);
+			throw new AppError("Invalid cause ID", 400);
 		}
 
-		console.log(`[getCauseById] Successfully found cause: ${cause.title}`);
+		try {
+			const cause = await Cause.findById(causeId).populate(
+				"organizationId",
+				"name"
+			);
 
-		const formattedCause = formatCauseResponse(cause);
-		console.log(`[getCauseById] Formatted cause:`, formattedCause);
+			if (!cause) {
+				console.log(`[getCauseById] Cause not found with ID: ${causeId}`);
+				throw new AppError("Cause not found", 404);
+			}
 
-		res.status(200).json({
-			cause: formattedCause,
-		});
-	} catch (error) {
-		console.error(`[getCauseById] Error finding cause:`, error);
-		throw error;
+			console.log(`[getCauseById] Successfully found cause: ${cause.title}`);
+
+			const formattedCause = formatCauseResponse(cause);
+			console.log(`[getCauseById] Formatted cause:`, formattedCause);
+
+			res.status(200).json({
+				cause: formattedCause,
+			});
+		} catch (error) {
+			console.error(`[getCauseById] Error finding cause:`, error);
+			throw error;
+		}
 	}
-});
+);
 // Create a new cause (organization only)
 
 export const createCause = catchAsync(
@@ -126,7 +128,7 @@ export const createCause = catchAsync(
 			tags,
 			acceptanceType,
 			donationItems,
-			acceptedDonationTypes
+			acceptedDonationTypes,
 		} = req.body;
 
 		// Validate required fields
@@ -154,26 +156,40 @@ export const createCause = catchAsync(
 			finalDonationItems = donationItems || [];
 
 			if (acceptedDonationTypes && acceptedDonationTypes.length > 0) {
-				finalAcceptedDonationTypes = finalAcceptanceType === "both"
-					? ["MONEY", ...acceptedDonationTypes.filter((type: string) => type !== "MONEY")]
-					: acceptedDonationTypes;
+				finalAcceptedDonationTypes =
+					finalAcceptanceType === "both"
+						? [
+								"MONEY",
+								...acceptedDonationTypes.filter(
+									(type: string) => type !== "MONEY"
+								),
+							]
+						: acceptedDonationTypes;
 			} else if (finalDonationItems.length > 0) {
 				// If no acceptedDonationTypes provided but donationItems exist, infer types
 				const inferredTypes = finalDonationItems.map((item: string) => {
 					switch (item.toUpperCase()) {
-						case 'CLOTHES': return "CLOTHES";
-						case 'BOOKS': return "BOOKS";
-						case 'TOYS': return "TOYS";
-						case 'FOOD': return "FOOD";
-						case 'FURNITURE': return "FURNITURE";
-						case 'HOUSEHOLD ITEMS': return "HOUSEHOLD";
-						default: return "OTHER";
+						case "CLOTHES":
+							return "CLOTHES";
+						case "BOOKS":
+							return "BOOKS";
+						case "TOYS":
+							return "TOYS";
+						case "FOOD":
+							return "FOOD";
+						case "FURNITURE":
+							return "FURNITURE";
+						case "HOUSEHOLD ITEMS":
+							return "HOUSEHOLD";
+						default:
+							return "OTHER";
 					}
 				});
 
-				finalAcceptedDonationTypes = finalAcceptanceType === "both"
-					? ["MONEY", ...inferredTypes]
-					: inferredTypes;
+				finalAcceptedDonationTypes =
+					finalAcceptanceType === "both"
+						? ["MONEY", ...inferredTypes]
+						: inferredTypes;
 			}
 		}
 
@@ -224,7 +240,7 @@ export const updateCause = catchAsync(
 			tags,
 			acceptanceType,
 			donationItems,
-			acceptedDonationTypes
+			acceptedDonationTypes,
 		} = req.body;
 
 		// Validate targetAmount if provided
@@ -244,29 +260,49 @@ export const updateCause = catchAsync(
 				// For money-only, clear item-related fields
 				finalDonationItems = [];
 				finalAcceptedDonationTypes = ["MONEY"];
-			} else if (finalAcceptanceType === "items" || finalAcceptanceType === "both") {
+			} else if (
+				finalAcceptanceType === "items" ||
+				finalAcceptanceType === "both"
+			) {
 				// For items or both, ensure we have the right donation types
 				if (finalDonationItems && finalDonationItems.length > 0) {
 					// If donationItems provided but no acceptedDonationTypes, infer them
-					if (!finalAcceptedDonationTypes || finalAcceptedDonationTypes.length === 0) {
+					if (
+						!finalAcceptedDonationTypes ||
+						finalAcceptedDonationTypes.length === 0
+					) {
 						const inferredTypes = finalDonationItems.map((item: string) => {
 							switch (item.toUpperCase()) {
-								case 'CLOTHES': return "CLOTHES";
-								case 'BOOKS': return "BOOKS";
-								case 'TOYS': return "TOYS";
-								case 'FOOD': return "FOOD";
-								case 'FURNITURE': return "FURNITURE";
-								case 'HOUSEHOLD ITEMS': return "HOUSEHOLD";
-								default: return "OTHER";
+								case "CLOTHES":
+									return "CLOTHES";
+								case "BOOKS":
+									return "BOOKS";
+								case "TOYS":
+									return "TOYS";
+								case "FOOD":
+									return "FOOD";
+								case "FURNITURE":
+									return "FURNITURE";
+								case "HOUSEHOLD ITEMS":
+									return "HOUSEHOLD";
+								default:
+									return "OTHER";
 							}
 						});
 
-						finalAcceptedDonationTypes = finalAcceptanceType === "both"
-							? ["MONEY", ...inferredTypes]
-							: inferredTypes;
-					} else if (finalAcceptanceType === "both" && !finalAcceptedDonationTypes.includes("MONEY")) {
+						finalAcceptedDonationTypes =
+							finalAcceptanceType === "both"
+								? ["MONEY", ...inferredTypes]
+								: inferredTypes;
+					} else if (
+						finalAcceptanceType === "both" &&
+						!finalAcceptedDonationTypes.includes("MONEY")
+					) {
 						// Ensure MONEY is included for "both" type
-						finalAcceptedDonationTypes = ["MONEY", ...finalAcceptedDonationTypes];
+						finalAcceptedDonationTypes = [
+							"MONEY",
+							...finalAcceptedDonationTypes,
+						];
 					}
 				}
 			}
@@ -282,7 +318,9 @@ export const updateCause = catchAsync(
 			tags: tags || cause.tags,
 			...(finalAcceptanceType && { acceptanceType: finalAcceptanceType }),
 			...(finalDonationItems && { donationItems: finalDonationItems }),
-			...(finalAcceptedDonationTypes && { acceptedDonationTypes: finalAcceptedDonationTypes }),
+			...(finalAcceptedDonationTypes && {
+				acceptedDonationTypes: finalAcceptedDonationTypes,
+			}),
 		});
 
 		await cause.save();
@@ -371,90 +409,6 @@ export const getOrganizationCauses = catchAsync(
 		});
 	}
 );
-
-// Get causes supported by the authenticated donor
-export const getDonorCauses = catchAsync(
-	async (req: AuthRequest, res: Response) => {
-		if (!req.user) {
-			throw new AppError("Unauthorized: Authentication required", 401);
-		}
-
-		const page = parseInt(req.query.page as string) || 1;
-		const limit = parseInt(req.query.limit as string) || 10;
-		const search = req.query.search as string;
-		const tag = req.query.tag as string;
-
-		// Find donations by the donor
-		const donationQuery: any = { donorId: req.user._id };
-
-		const donations = await Donation.find(donationQuery)
-			.select("causeId")
-			.distinct("causeId");
-
-		if (!donations.length) {
-			return res.status(200).json({
-				causes: [],
-				total: 0,
-				page,
-				limit,
-			});
-		}
-
-		// Query causes based on donation causeIds
-		const causeQuery: any = { _id: { $in: donations } };
-
-		if (search) {
-			causeQuery.$text = { $search: search };
-		}
-
-		if (tag) {
-			causeQuery.tags = tag;
-		}
-
-		const skip = (page - 1) * limit;
-
-		const [causes, total] = await Promise.all([
-			Cause.find(causeQuery)
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(limit)
-				.populate("organizationId", "name"),
-			Cause.countDocuments(causeQuery),
-		]);
-
-		res.status(200).json({
-			causes: causes.map(formatCauseResponse),
-			total,
-			page,
-			limit,
-		});
-	}
-);
-
-export const getCauseDetailsById = async (req: Request, res: Response) => {
-	try {
-		const { id } = req.params;
-
-		// Validate ObjectId format
-		if (!mongoose.Types.ObjectId.isValid(id)) {
-			return res.status(400).json({ message: "Invalid cause ID format" });
-		}
-
-		const cause = await Cause.findById(id).populate(
-			"organizationId",
-			"name email"
-		);
-
-		if (!cause) {
-			return res.status(404).json({ message: "Cause not found" });
-		}
-
-		res.status(200).json({ success: true, data: cause });
-	} catch (error) {
-		console.error("Error fetching cause by ID:", error);
-		res.status(500).json({ message: "Internal server error" });
-	}
-};
 
 // Get causes that are associated with active campaigns only
 export const getActiveCampaignCauses = catchAsync(

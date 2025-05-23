@@ -14,7 +14,6 @@ import notificationRoutes from "./routes/notification.routes";
 import adminRoutes from "./routes/admin.routes";
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
-import analyticsRoutes from "./routes/analytics.routes";
 
 // Load environment variables
 dotenv.config();
@@ -31,8 +30,8 @@ app.use(
 		origin: "http://localhost:3000",
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-		exposedHeaders: ["Content-Disposition"],
+		// 	// allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+		// 	exposedHeaders: ["Content-Disposition"],
 	})
 );
 
@@ -43,8 +42,20 @@ app.use(morgan("dev"));
 
 // Remove bodyParser.json() as it's redundant with express.json()
 // app.use(bodyParser.json());
-// Serve static files from uploads directory
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+
+// Serve static files from uploads directory (MUST be before API routes)
+app.use(
+	"/uploads/donation-photos",
+	express.static(path.join(__dirname, "../uploads/donation-photos"))
+);
+app.use(
+	"/uploads/profile-photos",
+	express.static(path.join(__dirname, "../uploads/profile-photos"))
+);
+app.use(
+	"/uploads/receipts",
+	express.static(path.join(__dirname, "../uploads/receipts"))
+);
 
 // Routes
 app.use("/api/auth", authRoutes);
@@ -56,7 +67,6 @@ app.use("/api/feedback", feedbackRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/donations", donationRoutes);
-app.use("/api/auth", authRoutes);
 app.use("/api/organizations", organizationRoutes);
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
@@ -66,47 +76,7 @@ app.get("/health", (req: Request, res: Response) => {
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: Function) => {
 	console.error("Error:", err);
-
-	// Check if it's a known operational error
-	if (err.isOperational) {
-		return res.status(err.statusCode).json({
-			success: false,
-			status: err.status,
-			message: err.message,
-		});
-	}
-
-	// MongoDB errors
-	if (err.name === "CastError") {
-		return res.status(400).json({
-			success: false,
-			status: "fail",
-			message: "Invalid ID format",
-		});
-	}
-
-	if (err.name === "ValidationError") {
-		return res.status(400).json({
-			success: false,
-			status: "fail",
-			message: "Validation error in the request data",
-		});
-	}
-
-	// For all other unexpected errors
-	res.status(500).json({
-		success: false,
-		status: "error",
-		message: "Something went wrong. Please try again later.",
-	});
 });
-
-// Test route for debugging
-app.get("/api/test", (req: Request, res: Response) => {
-	console.log("Test endpoint called");
-	res.status(200).json({ message: "Test endpoint working" });
-});
-
 // 404 route
 app.use("*", (req: Request, res: Response) => {
 	res.status(404).json({ message: "Route not found" });

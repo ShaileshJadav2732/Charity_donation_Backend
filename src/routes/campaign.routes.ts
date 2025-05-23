@@ -4,7 +4,6 @@ import {
 	getCampaigns,
 	getCampaignDetails,
 	updateCampaign,
-	updateCampaignStatus,
 	deleteCampaign,
 } from "../controllers/campaign.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -22,11 +21,6 @@ router.use(authenticate);
 // Organization-only routes
 router.post("/", authorize(["organization"]), createCampaign);
 router.patch("/:campaignId", authorize(["organization"]), updateCampaign);
-router.patch(
-	"/:campaignId/status",
-	authorize(["organization"]),
-	updateCampaignStatus
-);
 router.delete("/:campaignId", authorize(["organization"]), deleteCampaign);
 
 export default router;

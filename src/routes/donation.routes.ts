@@ -1,3 +1,4 @@
+import { authenticate } from "./../middleware/auth.middleware";
 import express from "express";
 import {
 	confirmDonationReceipt,
@@ -8,11 +9,15 @@ import {
 	getItemDonationAnalytics,
 	getItemDonationTypeAnalytics,
 	markDonationAsReceived,
+	markDonationAsConfirmed,
 	updateDonationStatus,
 } from "../controllers/donation.controller";
-import { authenticate } from "../middleware/auth.middleware";
+
 import { authorize } from "../middleware/role.middleware";
-import { uploadDonationPhoto } from "../middleware/upload.middleware";
+import {
+	uploadDonationPhoto,
+	uploadReceipt,
+} from "../middleware/upload.middleware";
 
 const router = express.Router();
 // All routes require authentication
@@ -22,7 +27,12 @@ router.use(authenticate);
 router.post("/", createDonation);
 
 // Get donor's donations with optional filtering
-router.get("/", getDonorDonations);
+router.get(
+	"/",
+	authorize(["donor"]),
+
+	getDonorDonations
+);
 
 // Get organization's pending donations
 router.get(
@@ -41,7 +51,7 @@ router.get("/items/analytics", getItemDonationAnalytics);
 router.get("/items/:type/analytics", getItemDonationTypeAnalytics);
 
 // Update donation status
-router.patch("/:donationId/status", authenticate, updateDonationStatus);
+router.patch("/:donationId/status", updateDonationStatus);
 
 // Mark donation as received with photo upload
 router.patch(
@@ -58,6 +68,15 @@ router.patch(
 	authenticate,
 	authorize(["donor"]),
 	confirmDonationReceipt
+);
+
+// Mark donation as confirmed with receipt upload (for organizations)
+router.patch(
+	"/:donationId/confirmed",
+	authenticate,
+	authorize(["organization"]),
+	uploadReceipt,
+	markDonationAsConfirmed
 );
 
 export default router;

@@ -1,12 +1,10 @@
 import express from "express";
 import {
 	getCauses,
-	// getCauseDetails,
 	createCause,
 	updateCause,
 	deleteCause,
 	getOrganizationCauses,
-	getDonorCauses,
 	getActiveCampaignCauses,
 	getCauseById,
 } from "../controllers/cause.controller";
@@ -35,10 +33,5 @@ router.delete(
 	authorize(["organization"]),
 	deleteCause
 );
-
-// Organization routes
-
-// Donor routes
-router.get("/donor/supported", getDonorCauses);
 
 export default router;

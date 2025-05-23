@@ -43,7 +43,17 @@ export const sendEmail = async (
 			`;
 		} else if (status === DonationStatus.CONFIRMED) {
 			statusSpecificContent = `
-				<p>Your donation has been <strong>confirmed</strong>. Thank you for your contribution!</p>
+				<div style="background-color: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 16px 0;">
+					<h3 style="color: #0369a1; margin: 0 0 8px 0;">🎉 Donation Confirmed!</h3>
+					<p style="margin: 0; color: #0369a1;">Your donation has been <strong>confirmed</strong> by the donor. The donation process is now complete!</p>
+				</div>
+				<p>Thank you for making a difference in the community. Your generous contribution has been successfully processed and confirmed.</p>
+				<p><strong>What happens next?</strong></p>
+				<ul>
+					<li>The donation is now marked as complete in our system</li>
+					<li>You will receive impact reports showing how your donation helped</li>
+					<li>You can track your donation history in your dashboard</li>
+				</ul>
 			`;
 		} else if (status === DonationStatus.APPROVED) {
 			statusSpecificContent = `
