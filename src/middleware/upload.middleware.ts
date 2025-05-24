@@ -66,8 +66,8 @@ const profilePhotoStorage = multer.diskStorage({
 	},
 });
 
-// File filter to only allow image uploads
-const fileFilter = (
+// File filter to only allow image uploads (for photos)
+const imageFileFilter = (
 	req: any,
 	file: Express.Multer.File,
 	cb: multer.FileFilterCallback
@@ -79,13 +79,41 @@ const fileFilter = (
 	}
 };
 
+// File filter for receipts (allows images and PDFs)
+const receiptFileFilter = (
+	req: any,
+	file: Express.Multer.File,
+	cb: multer.FileFilterCallback
+) => {
+	const allowedMimeTypes = [
+		"image/jpeg",
+		"image/jpg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+		"application/pdf",
+		"image/bmp",
+		"image/tiff",
+	];
+
+	if (allowedMimeTypes.includes(file.mimetype)) {
+		cb(null, true);
+	} else {
+		cb(
+			new Error(
+				"Only image files (JPEG, PNG, GIF, WebP, BMP, TIFF) and PDF files are allowed for receipts!"
+			)
+		);
+	}
+};
+
 // Create multer instances
 const multerUploadDonationPhoto = multer({
 	storage: donationPhotoStorage,
 	limits: {
 		fileSize: 5 * 1024 * 1024, // 5MB max file size
 	},
-	fileFilter,
+	fileFilter: imageFileFilter,
 }).single("photo");
 
 const multerUploadReceipt = multer({
@@ -93,7 +121,7 @@ const multerUploadReceipt = multer({
 	limits: {
 		fileSize: 5 * 1024 * 1024, // 5MB max file size
 	},
-	fileFilter,
+	fileFilter: receiptFileFilter,
 }).single("receipt");
 
 const multerUploadProfilePhoto = multer({
@@ -101,7 +129,7 @@ const multerUploadProfilePhoto = multer({
 	limits: {
 		fileSize: 5 * 1024 * 1024, // 5MB max file size
 	},
-	fileFilter,
+	fileFilter: imageFileFilter,
 }).single("profileImage");
 
 // Wrapper middleware to handle multer errors

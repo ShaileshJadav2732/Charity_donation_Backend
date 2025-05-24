@@ -59,9 +59,86 @@ export const createDonation = async (req: Request, res: Response) => {
 
 		await donation.save();
 
+		// Populate the donation with organization and donor details for notification
+		const populatedDonation = await Donation.findById(donation._id)
+			.populate<{ donor: IUser }>("donor", "name email")
+			.populate("organization", "_id name email")
+			.populate("cause", "title");
+
+		// Send notification to organization about new donation
+		let orgNotificationStatus = "No notification created";
+		if (populatedDonation?.organization) {
+			try {
+				// Find the organization document to get the userId
+				const orgDoc = await Organization.findById(
+					populatedDonation.organization._id
+				);
+
+				if (orgDoc?.userId) {
+					const donationTypeText =
+						type === DonationType.MONEY
+							? `$${amount?.toFixed(2) || "0.00"}`
+							: `${quantity || 0} ${unit || ""} of ${type}`;
+
+					await Notification.create({
+						recipient: orgDoc.userId, // Send to the user who owns the organization
+						type: NotificationType.DONATION_RECEIVED,
+						title: "New Donation Received",
+						message: `You have received a new donation: ${donationTypeText} from ${populatedDonation.donor?.name || "Anonymous Donor"}. Please review and approve the donation.`,
+						isRead: false,
+						data: {
+							donationId: donation._id,
+							donorName: populatedDonation.donor?.name || "Anonymous",
+							donationType: type,
+							amount: type === DonationType.MONEY ? amount : undefined,
+							quantity: type !== DonationType.MONEY ? quantity : undefined,
+							unit: type !== DonationType.MONEY ? unit : undefined,
+							causeName: (populatedDonation.cause as any)?.title,
+							status: DonationStatus.PENDING,
+						},
+					});
+					console.log(
+						`Notification created for organization user ${orgDoc.userId}`
+					);
+					orgNotificationStatus = "Notification created successfully";
+				}
+			} catch (notificationError) {
+				console.error(
+					`Failed to create notification for organization of donation ${donation._id}:`,
+					notificationError
+				);
+				orgNotificationStatus = "Failed to create notification";
+			}
+		}
+
+		// Send email notification to organization
+		let orgEmailStatus = "No email sent";
+		const organizationData = populatedDonation?.organization as any;
+		if (organizationData?.email) {
+			try {
+				await sendEmail(
+					organizationData.email,
+					donation._id.toString(),
+					DonationStatus.PENDING,
+					amount,
+					quantity,
+					unit
+				);
+				orgEmailStatus = "Email sent successfully to organization";
+			} catch (emailError) {
+				console.error(
+					`Failed to send email to organization for donation ${donation._id}:`,
+					emailError
+				);
+				orgEmailStatus = "Failed to send email to organization";
+			}
+		}
+
 		res.status(201).json({
 			success: true,
 			data: donation,
+			orgNotificationStatus,
+			orgEmailStatus,
 		});
 	} catch (error: any) {
 		res.status(500).json({
@@ -703,6 +780,7 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 		// Verify organization ownership
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
+			userId: req.user._id, // Check if the current user owns this organization
 		});
 
 		if (!organization) {
@@ -875,6 +953,7 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		// Verify organization ownership
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
+			userId: req.user._id, // Check if the current user owns this organization
 		});
 
 		if (!organization) {
@@ -895,41 +974,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		// Get the photo file path
 		const photoUrl = `/uploads/donation-photos/${req.file.filename}`;
 
-		// Generate PDF receipt automatically
-		let pdfReceiptUrl = "";
-		try {
-			const donationData = {
-				donationId: donation._id.toString(),
-				donorName: (donation.donor as any)?.name || "Anonymous Donor",
-				donorEmail: (donation.donor as any)?.email || "No email provided",
-				organizationName:
-					(donation.organization as any)?.name || "Organization",
-				organizationEmail:
-					(donation.organization as any)?.email || "No email provided",
-				amount: donation.amount,
-				quantity: donation.quantity,
-				unit: donation.unit,
-				type: donation.type,
-				description: donation.description || "No description provided",
-				receivedDate: new Date(),
-				cause: (donation.cause as any)?.title || undefined,
-			};
-
-			pdfReceiptUrl = await generateDonationReceipt(donationData);
-			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
-		} catch (pdfError) {
-			console.error("Failed to generate PDF receipt:", pdfError);
-			// Continue with the process even if PDF generation fails
-		}
-
 		// Update donation status and receipt image
 		donation.status = DonationStatus.RECEIVED;
 		donation.receiptImage = photoUrl;
-
-		// Store the PDF receipt URL if generated successfully
-		if (pdfReceiptUrl) {
-			donation.pdfReceiptUrl = pdfReceiptUrl;
-		}
 
 		// Store photo metadata for better tracking
 		donation.receiptImageMetadata = {
@@ -1021,12 +1068,10 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		res.status(200).json({
 			success: true,
 			data: donation,
-			message:
-				"Donation marked as received with photo and PDF receipt generated",
+			message: "Donation marked as received with photo",
 			emailStatus,
 			notificationStatus,
 			photoUrl,
-			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
 		console.error("Error marking donation as received:", error);
@@ -1105,15 +1150,74 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 			});
 		}
 
+		// Generate PDF receipt for the donor
+		let pdfReceiptUrl = "";
+		try {
+			const donationData = {
+				donationId: donation._id.toString(),
+				donorName: (req.user as any)?.name || "Anonymous Donor",
+				donorEmail: (req.user as any)?.email || "No email provided",
+				organizationName:
+					(donation.organization as any)?.name || "Organization",
+				organizationEmail:
+					(donation.organization as any)?.email || "No email provided",
+				amount: donation.amount,
+				quantity: donation.quantity,
+				unit: donation.unit,
+				type: donation.type,
+				description: donation.description || "No description provided",
+				receivedDate: new Date(),
+				cause: (donation.cause as any)?.title || undefined,
+			};
+
+			pdfReceiptUrl = await generateDonationReceipt(donationData);
+			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
+		} catch (pdfError) {
+			console.error("Failed to generate PDF receipt:", pdfError);
+			// Continue with the process even if PDF generation fails
+		}
+
 		// Update donation status and confirmation date
 		donation.status = DonationStatus.CONFIRMED;
 		donation.confirmationDate = new Date();
 
+		// Store the PDF receipt URL if generated successfully
+		if (pdfReceiptUrl) {
+			donation.pdfReceiptUrl = pdfReceiptUrl;
+		}
+
 		// Save the updated donation
 		await donation.save();
 
+		// Send email notification to donor with receipt
+		let donorEmailStatus = "No email sent to donor";
+		if ((req.user as any)?.email) {
+			try {
+				await sendEmail(
+					(req.user as any).email,
+					donation._id.toString(),
+					DonationStatus.CONFIRMED,
+					donation.amount,
+					donation.quantity,
+					donation.unit,
+					undefined, // no photo URL needed for confirmed status
+					pdfReceiptUrl // pass the PDF receipt URL
+				);
+				donorEmailStatus = "Email sent successfully to donor with receipt";
+			} catch (emailError) {
+				console.error(
+					`Failed to send email to donor for donation ${donationId}:`,
+					emailError
+				);
+				donorEmailStatus = "Failed to send email to donor";
+			}
+		} else {
+			console.warn(`No email provided for donor of donation ${donationId}`);
+			donorEmailStatus = "No donor email provided";
+		}
+
 		// Send email notification to organization
-		let emailStatus = "No email sent";
+		let orgEmailStatus = "No email sent to organization";
 		const organizationData = donation.organization as any;
 		if (organizationData?.email) {
 			try {
@@ -1125,19 +1229,19 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 					donation.quantity,
 					donation.unit
 				);
-				emailStatus = "Email sent successfully to organization";
+				orgEmailStatus = "Email sent successfully to organization";
 			} catch (emailError) {
 				console.error(
 					`Failed to send email to organization for donation ${donationId}:`,
 					emailError
 				);
-				emailStatus = "Failed to send email to organization";
+				orgEmailStatus = "Failed to send email to organization";
 			}
 		} else {
 			console.warn(
 				`No email provided for organization of donation ${donationId}`
 			);
-			emailStatus = "No organization email provided";
+			orgEmailStatus = "No organization email provided";
 		}
 
 		// Create notification for organization
@@ -1170,9 +1274,11 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 		res.status(200).json({
 			success: true,
 			data: donation,
-			message: "Donation confirmed successfully",
-			emailStatus,
+			message: "Donation confirmed successfully with receipt generated",
+			donorEmailStatus,
+			orgEmailStatus,
 			notificationStatus,
+			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
 		console.error("Error confirming donation:", error);
@@ -1234,7 +1340,12 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		}
 
 		// Verify organization ownership
-		if (donation.organization._id.toString() !== req.user._id.toString()) {
+		const organization = await Organization.findOne({
+			_id: donation?.organization._id,
+			userId: req.user._id, // Check if the current user owns this organization
+		});
+
+		if (!organization) {
 			return res.status(403).json({
 				success: false,
 				message: "You do not have permission to update this donation",
@@ -1252,10 +1363,42 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		// Get the receipt file path
 		const receiptUrl = `/uploads/receipts/${req.file.filename}`;
 
+		// Generate PDF receipt for the donor
+		let pdfReceiptUrl = "";
+		try {
+			const donationData = {
+				donationId: donation._id.toString(),
+				donorName: (donation.donor as any)?.name || "Anonymous Donor",
+				donorEmail: (donation.donor as any)?.email || "No email provided",
+				organizationName:
+					(donation.organization as any)?.name || "Organization",
+				organizationEmail:
+					(donation.organization as any)?.email || "No email provided",
+				amount: donation.amount,
+				quantity: donation.quantity,
+				unit: donation.unit,
+				type: donation.type,
+				description: donation.description || "No description provided",
+				receivedDate: new Date(),
+				cause: (donation.cause as any)?.title || undefined,
+			};
+
+			pdfReceiptUrl = await generateDonationReceipt(donationData);
+			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
+		} catch (pdfError) {
+			console.error("Failed to generate PDF receipt:", pdfError);
+			// Continue with the process even if PDF generation fails
+		}
+
 		// Update donation status and receipt
 		donation.status = DonationStatus.CONFIRMED;
 		donation.receiptImage = receiptUrl;
 		donation.confirmationDate = new Date();
+
+		// Store the PDF receipt URL if generated successfully
+		if (pdfReceiptUrl) {
+			donation.pdfReceiptUrl = pdfReceiptUrl;
+		}
 
 		// Store receipt metadata for better tracking
 		donation.receiptImageMetadata = {
@@ -1269,7 +1412,7 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		// Save the updated donation
 		await donation.save();
 
-		// Send email notification to donor
+		// Send email notification to donor with PDF receipt
 		let emailStatus = "No email sent";
 		const donorData = donation.donor as any;
 		if (donorData?.email) {
@@ -1280,9 +1423,11 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 					DonationStatus.CONFIRMED,
 					donation.amount,
 					donation.quantity,
-					donation.unit
+					donation.unit,
+					undefined, // no photo URL needed for confirmed status
+					pdfReceiptUrl // pass the PDF receipt URL
 				);
-				emailStatus = "Email sent successfully to donor";
+				emailStatus = "Email sent successfully to donor with receipt";
 			} catch (emailError) {
 				console.error(
 					`Failed to send email to donor for donation ${donationId}:`,
@@ -1330,10 +1475,11 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		res.status(200).json({
 			success: true,
 			data: donation,
-			message: "Donation marked as confirmed with receipt",
+			message: "Donation marked as confirmed with receipt generated",
 			emailStatus,
 			notificationStatus,
 			receiptUrl,
+			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
 		console.error("Error marking donation as confirmed:", error);

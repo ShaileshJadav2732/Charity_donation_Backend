@@ -12,7 +12,8 @@ export const sendEmail = async (
 	amount?: number,
 	quantity?: number,
 	unit?: string,
-	photoUrl?: string
+	photoUrl?: string,
+	pdfReceiptUrl?: string
 ) => {
 	try {
 		// Validate input
@@ -45,19 +46,50 @@ export const sendEmail = async (
 			statusSpecificContent = `
 				<div style="background-color: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 16px 0;">
 					<h3 style="color: #0369a1; margin: 0 0 8px 0;">🎉 Donation Confirmed!</h3>
-					<p style="margin: 0; color: #0369a1;">Your donation has been <strong>confirmed</strong> by the donor. The donation process is now complete!</p>
+					<p style="margin: 0; color: #0369a1;">Your donation has been <strong>confirmed</strong> and the donation process is now complete!</p>
 				</div>
 				<p>Thank you for making a difference in the community. Your generous contribution has been successfully processed and confirmed.</p>
+				${
+					pdfReceiptUrl
+						? `
+				<div style="background-color: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 16px; margin: 16px 0;">
+					<h4 style="color: #15803d; margin: 0 0 8px 0;">📄 Your Receipt is Ready!</h4>
+					<p style="margin: 0; color: #15803d;">Your donation receipt has been generated and is available for download.</p>
+					<p style="margin: 8px 0 0 0;">
+						<a href="${process.env.BACKEND_URL || "http://localhost:5000"}${pdfReceiptUrl}"
+						   style="background-color: #22c55e; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block;">
+						   Download Receipt
+						</a>
+					</p>
+				</div>
+				`
+						: ""
+				}
 				<p><strong>What happens next?</strong></p>
 				<ul>
 					<li>The donation is now marked as complete in our system</li>
 					<li>You will receive impact reports showing how your donation helped</li>
 					<li>You can track your donation history in your dashboard</li>
+					<li>Keep your receipt for tax purposes</li>
 				</ul>
 			`;
 		} else if (status === DonationStatus.APPROVED) {
 			statusSpecificContent = `
 				<p>Your donation has been <strong>approved</strong> by the organization and is being processed.</p>
+			`;
+		} else if (status === DonationStatus.PENDING) {
+			statusSpecificContent = `
+				<div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px; margin: 16px 0;">
+					<h3 style="color: #92400e; margin: 0 0 8px 0;">📋 New Donation Received!</h3>
+					<p style="margin: 0; color: #92400e;">A new donation has been submitted and is awaiting your review.</p>
+				</div>
+				<p>A donor has submitted a new donation to your organization. Please review the details and approve or take appropriate action.</p>
+				<p><strong>What you need to do:</strong></p>
+				<ul>
+					<li>Review the donation details in your dashboard</li>
+					<li>Approve the donation if everything looks correct</li>
+					<li>Contact the donor if you need more information</li>
+				</ul>
 			`;
 		} else {
 			statusSpecificContent = `
@@ -65,10 +97,17 @@ export const sendEmail = async (
 			`;
 		}
 
+		const greeting =
+			status === DonationStatus.PENDING ? "Dear Organization," : "Dear Donor,";
+		const title =
+			status === DonationStatus.PENDING
+				? "New Donation Notification"
+				: "Donation Status Update";
+
 		const html = `
       <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px;">
-        <h2>Donation Status Update</h2>
-        <p>Dear Donor,</p>
+        <h2>${title}</h2>
+        <p>${greeting}</p>
         ${statusSpecificContent}
         ${
 					amount

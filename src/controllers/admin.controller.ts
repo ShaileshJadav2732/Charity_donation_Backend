@@ -5,10 +5,8 @@ import Campaign from "../models/campaign.model";
 import Cause from "../models/cause.model";
 import Feedback from "../models/feedback.model";
 import Organization from "../models/organization.model";
-import mongoose from "mongoose";
-
 // Get platform statistics
-export const getPlatformStats = async (req: Request, res: Response) => {
+export const getPlatformStats = async (_req: Request, res: Response) => {
 	try {
 		// Get user stats
 		const userStats = await User.aggregate([
