@@ -14,6 +14,7 @@ import notificationRoutes from "./routes/notification.routes";
 import adminRoutes from "./routes/admin.routes";
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
+import { NotificationService } from "./services/notificationService";
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +40,15 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+
+// Middleware to attach notification service to requests
+app.use((req: any, res, next) => {
+	const io = app.get("io");
+	if (io) {
+		req.notificationService = new NotificationService(io);
+	}
+	next();
+});
 
 // Remove bodyParser.json() as it's redundant with express.json()
 // app.use(bodyParser.json());

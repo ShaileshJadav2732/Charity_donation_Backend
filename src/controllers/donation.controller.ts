@@ -9,7 +9,7 @@ import Organization from "../models/organization.model";
 import { sendEmail } from "../utils/email";
 import { generateDonationReceipt } from "../utils/pdfGenerator";
 import { IUser } from "../types";
-import Notification, { NotificationType } from "../models/notification.model";
+
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {
@@ -51,7 +51,7 @@ export const createDonation = async (req: Request, res: Response) => {
 			scheduledTime: type !== DonationType.MONEY ? scheduledTime : undefined,
 			pickupAddress: type !== DonationType.MONEY ? pickupAddress : undefined,
 			dropoffAddress: type !== DonationType.MONEY ? dropoffAddress : undefined,
-			isPickup: type !== DonationType.MONEY ? isPickup : undefined,
+			isPickup: type === DonationType.MONEY ? false : Boolean(isPickup), // Always provide boolean
 			contactPhone,
 			contactEmail,
 			notes,
@@ -65,9 +65,9 @@ export const createDonation = async (req: Request, res: Response) => {
 			.populate("organization", "_id name email")
 			.populate("cause", "title");
 
-		// Send notification to organization about new donation
+		// Send real-time notification to organization about new donation
 		let orgNotificationStatus = "No notification created";
-		if (populatedDonation?.organization) {
+		if (populatedDonation?.organization && (req as any).notificationService) {
 			try {
 				// Find the organization document to get the userId
 				const orgDoc = await Organization.findById(
@@ -75,39 +75,29 @@ export const createDonation = async (req: Request, res: Response) => {
 				);
 
 				if (orgDoc?.userId) {
-					const donationTypeText =
-						type === DonationType.MONEY
-							? `$${amount?.toFixed(2) || "0.00"}`
-							: `${quantity || 0} ${unit || ""} of ${type}`;
-
-					await Notification.create({
-						recipient: orgDoc.userId, // Send to the user who owns the organization
-						type: NotificationType.DONATION_RECEIVED,
-						title: "New Donation Received",
-						message: `You have received a new donation: ${donationTypeText} from ${populatedDonation.donor?.name || "Anonymous Donor"}. Please review and approve the donation.`,
-						isRead: false,
-						data: {
-							donationId: donation._id,
-							donorName: populatedDonation.donor?.name || "Anonymous",
-							donationType: type,
-							amount: type === DonationType.MONEY ? amount : undefined,
-							quantity: type !== DonationType.MONEY ? quantity : undefined,
-							unit: type !== DonationType.MONEY ? unit : undefined,
-							causeName: (populatedDonation.cause as any)?.title,
-							status: DonationStatus.PENDING,
-						},
-					});
-					console.log(
-						`Notification created for organization user ${orgDoc.userId}`
+					await (
+						req as any
+					).notificationService.createDonationReceivedNotification(
+						orgDoc.userId.toString(),
+						{
+							donorName: populatedDonation.donor?.name || "Anonymous Donor",
+							amount: type === DonationType.MONEY ? amount || 0 : 0,
+							cause:
+								(populatedDonation.cause as any)?.title || "your organization",
+							donationId: donation._id.toString(),
+						}
 					);
-					orgNotificationStatus = "Notification created successfully";
+					console.log(
+						`Real-time notification created for organization user ${orgDoc.userId}`
+					);
+					orgNotificationStatus = "Real-time notification created successfully";
 				}
 			} catch (notificationError) {
 				console.error(
-					`Failed to create notification for organization of donation ${donation._id}:`,
+					`Failed to create real-time notification for organization of donation ${donation._id}:`,
 					notificationError
 				);
-				orgNotificationStatus = "Failed to create notification";
+				orgNotificationStatus = "Failed to create real-time notification";
 			}
 		}
 
@@ -851,24 +841,28 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 		}
 
 		let notificationStatus = "No notification created";
-		if (donation.donor?._id) {
+		if (donation.donor?._id && (req as any).notificationService) {
 			try {
-				await Notification.create({
-					recipient: donation.donor._id,
-					type: NotificationType.DONATION_STATUS_UPDATED,
-					title: `Donation Status Update`,
-					message: `Your donation (ID: ${donation._id}) has been updated to ${status}.`,
-					isRead: false,
-					data: { donationId: donation._id, status },
-				});
-				console.log(`Notification created for donor ${donation.donor._id}`);
-				notificationStatus = "Notification created successfully";
+				await (req as any).notificationService.createDonationStatusNotification(
+					donation.donor._id.toString(),
+					{
+						donationId: donation._id.toString(),
+						status: status,
+						organizationName:
+							(donation.organization as any)?.name || "Organization",
+						cause: (donation.cause as any)?.title || "Unknown cause",
+					}
+				);
+				console.log(
+					`Real-time notification created for donor ${donation.donor._id}`
+				);
+				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(
-					`Failed to create notification for donation ${donationId}:`,
+					`Failed to create real-time notification for donation ${donationId}:`,
 					notificationError
 				);
-				notificationStatus = "Failed to create notification";
+				notificationStatus = "Failed to create real-time notification";
 			}
 		} else {
 			console.warn(`No donor ID provided for donation ${donationId}`);
@@ -1034,30 +1028,30 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			emailStatus = "No donor email provided";
 		}
 
-		// Create notification for donor
+		// Create real-time notification for donor
 		let notificationStatus = "No notification created";
-		if (donation.donor?._id) {
+		if (donation.donor?._id && (req as any).notificationService) {
 			try {
-				await Notification.create({
-					recipient: donation.donor._id,
-					type: NotificationType.DONATION_STATUS_UPDATED,
-					title: "Donation Received",
-					message: `Your donation (ID: ${donation._id}) has been received by the organization. Please check your email for details and confirm the receipt.`,
-					isRead: false,
-					data: {
-						donationId: donation._id,
+				await (req as any).notificationService.createDonationStatusNotification(
+					donation.donor._id.toString(),
+					{
+						donationId: donation._id.toString(),
 						status: DonationStatus.RECEIVED,
-						photoUrl: photoUrl,
-					},
-				});
-				console.log(`Notification created for donor ${donation.donor._id}`);
-				notificationStatus = "Notification created successfully";
+						organizationName:
+							(donation.organization as any)?.name || "Organization",
+						cause: (donation.cause as any)?.title || "Unknown cause",
+					}
+				);
+				console.log(
+					`Real-time notification created for donor ${donation.donor._id}`
+				);
+				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(
-					`Failed to create notification for donation ${donationId}:`,
+					`Failed to create real-time notification for donation ${donationId}:`,
 					notificationError
 				);
-				notificationStatus = "Failed to create notification";
+				notificationStatus = "Failed to create real-time notification";
 			}
 		} else {
 			console.warn(`No donor ID provided for donation ${donationId}`);
@@ -1244,29 +1238,35 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 			orgEmailStatus = "No organization email provided";
 		}
 
-		// Create notification for organization
+		// Create real-time notification for organization
 		let notificationStatus = "No notification created";
-		if (donation.organization) {
+		if (donation.organization && (req as any).notificationService) {
 			try {
-				await Notification.create({
-					recipient: donation.organization,
-					type: NotificationType.DONATION_STATUS_UPDATED,
-					title: "Donation Confirmed",
-					message: `A donation (ID: ${donation._id}) has been confirmed by the donor. The donation process is now complete.`,
-					isRead: false,
-					data: {
-						donationId: donation._id,
-						status: DonationStatus.CONFIRMED,
-						confirmationDate: donation.confirmationDate,
-					},
-				});
-				notificationStatus = "Notification created successfully";
+				// Find the organization document to get the userId
+				const orgDoc = await Organization.findById(donation.organization._id);
+				if (orgDoc?.userId) {
+					await (
+						req as any
+					).notificationService.createDonationStatusNotification(
+						orgDoc.userId.toString(),
+						{
+							donationId: donation._id.toString(),
+							status: DonationStatus.CONFIRMED,
+							organizationName:
+								(donation.organization as any)?.name || "Organization",
+							cause: (donation.cause as any)?.title || "Unknown cause",
+						}
+					);
+					notificationStatus = "Real-time notification created successfully";
+				} else {
+					notificationStatus = "No organization userId found";
+				}
 			} catch (notificationError) {
 				console.error(
-					`Failed to create notification for donation ${donationId}:`,
+					`Failed to create real-time notification for donation ${donationId}:`,
 					notificationError
 				);
-				notificationStatus = "Failed to create notification";
+				notificationStatus = "Failed to create real-time notification";
 			}
 		}
 
@@ -1440,31 +1440,30 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			emailStatus = "No donor email provided";
 		}
 
-		// Create notification for donor
+		// Create real-time notification for donor
 		let notificationStatus = "No notification created";
-		if (donation.donor?._id) {
+		if (donation.donor?._id && (req as any).notificationService) {
 			try {
-				await Notification.create({
-					recipient: donation.donor._id,
-					type: NotificationType.DONATION_STATUS_UPDATED,
-					title: "Donation Confirmed - Receipt Available",
-					message: `Your donation (ID: ${donation._id}) has been confirmed and a receipt is now available for download.`,
-					isRead: false,
-					data: {
-						donationId: donation._id,
+				await (req as any).notificationService.createDonationStatusNotification(
+					donation.donor._id.toString(),
+					{
+						donationId: donation._id.toString(),
 						status: DonationStatus.CONFIRMED,
-						receiptUrl: receiptUrl,
-						confirmationDate: donation.confirmationDate,
-					},
-				});
-				console.log(`Notification created for donor ${donation.donor._id}`);
-				notificationStatus = "Notification created successfully";
+						organizationName:
+							(donation.organization as any)?.name || "Organization",
+						cause: (donation.cause as any)?.title || "Unknown cause",
+					}
+				);
+				console.log(
+					`Real-time notification created for donor ${donation.donor._id}`
+				);
+				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(
-					`Failed to create notification for donation ${donationId}:`,
+					`Failed to create real-time notification for donation ${donationId}:`,
 					notificationError
 				);
-				notificationStatus = "Failed to create notification";
+				notificationStatus = "Failed to create real-time notification";
 			}
 		} else {
 			console.warn(`No donor ID provided for donation ${donationId}`);

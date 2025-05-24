@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
 import Feedback from "../models/feedback.model";
-import { createNotification } from "./notification.controller";
-import { NotificationType } from "../models/notification.model";
 
 // Create new feedback
 export const createFeedback = async (req: Request, res: Response) => {
@@ -19,14 +17,25 @@ export const createFeedback = async (req: Request, res: Response) => {
 			isPublic,
 		});
 
-		// Send notification to organization
-		await createNotification({
-			recipient: organizationId,
-			type: NotificationType.FEEDBACK_RECEIVED,
-			title: "New Feedback Received",
-			message: `You have received a new ${rating}-star feedback`,
-			data: { feedbackId: feedback._id },
-		});
+		// Send real-time notification to organization
+		if ((req as any).notificationService && organizationId) {
+			try {
+				await (req as any).notificationService.createFeedbackNotification(
+					organizationId,
+					{
+						feedbackId: feedback._id.toString(),
+						senderName: (req.user as any)?.name || "Anonymous User",
+						type: "received",
+						subject: `${rating}-star feedback`,
+					}
+				);
+			} catch (notificationError) {
+				console.error(
+					"Failed to send feedback notification:",
+					notificationError
+				);
+			}
+		}
 
 		res.status(201).json({
 			success: true,
