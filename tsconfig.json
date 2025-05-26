@@ -4,10 +4,11 @@
 		"module": "commonjs",
 		"rootDir": "./src",
 		"outDir": "./dist",
-		"strict": true,
+		"strict": false,
 		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
+		"forceConsistentCasingInFileNames": false,
 		"skipLibCheck": true,
+		"noImplicitAny": false,
 		"typeRoots": ["./node_modules/@types", "./src/types"],
 		"baseUrl": "./src",
 		"paths": {

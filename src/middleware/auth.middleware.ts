@@ -2,14 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import admin from "../config/firebase.config";
 import User from "../models/user.model";
-import { AuthRequest, IUser } from "../types";
+import { AuthRequest, AuthUser } from "../types";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
 
 declare global {
 	namespace Express {
 		interface Request {
-			user?: IUser;
+			user?: AuthUser;
 		}
 	}
 }
@@ -36,7 +36,11 @@ export const authenticate = async (
 			return res.status(401).json({ message: "User not found" });
 		}
 
-		req.user = user;
+		req.user = {
+			id: user._id.toString(),
+			email: user.email,
+			role: user.role,
+		};
 		next();
 	} catch (error: any) {
 		res.status(401).json({

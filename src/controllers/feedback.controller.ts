@@ -190,14 +190,8 @@ export const updateFeedbackStatus = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Send notification to donor
-		await createNotification({
-			recipient: feedback.donor,
-			type: NotificationType.FEEDBACK_RESPONSE,
-			title: "Feedback Status Updated",
-			message: `Your feedback has been ${status}`,
-			data: { feedbackId: feedback._id },
-		});
+		// TODO: Send notification to donor when notification system is implemented
+		console.log(`Feedback ${feedbackId} status updated to ${status}`);
 
 		res.status(200).json({
 			success: true,

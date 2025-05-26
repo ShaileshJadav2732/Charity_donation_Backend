@@ -47,8 +47,14 @@ export interface IOrganizationProfile {
 	updatedAt?: Date;
 }
 
+export interface AuthUser {
+	id: string;
+	email: string;
+	role: "donor" | "organization" | "admin";
+}
+
 export interface AuthRequest extends Request {
-	user?: IUser;
+	user?: AuthUser;
 }
 
 export enum DonationType {

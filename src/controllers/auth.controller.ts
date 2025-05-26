@@ -7,6 +7,10 @@ import { AuthRequest } from "../types";
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "7d";
 
+if (!JWT_SECRET) {
+	throw new Error("JWT_SECRET is required");
+}
+
 // Register a new user
 export const register = async (req: Request, res: Response) => {
 	try {
@@ -54,8 +58,8 @@ export const register = async (req: Request, res: Response) => {
 		// Generate JWT token
 		const token = jwt.sign(
 			{ id: newUser._id, email: newUser.email, role: newUser.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
+			JWT_SECRET as string,
+			{ expiresIn: JWT_EXPIRATION as string }
 		);
 
 		return res.status(201).json({
@@ -101,8 +105,8 @@ export const login = async (req: Request, res: Response) => {
 		// Generate JWT token
 		const token = jwt.sign(
 			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
+			JWT_SECRET as string,
+			{ expiresIn: JWT_EXPIRATION as string }
 		);
 
 		return res.status(200).json({
@@ -151,8 +155,8 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 		// Generate JWT token
 		const token = jwt.sign(
 			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET,
-			{ expiresIn: JWT_EXPIRATION }
+			JWT_SECRET as string,
+			{ expiresIn: JWT_EXPIRATION as string }
 		);
 
 		return res.status(200).json({
