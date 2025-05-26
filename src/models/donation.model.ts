@@ -61,6 +61,8 @@ export interface IDonation extends Document {
 	pdfReceiptUrl?: string;
 	confirmationDate?: Date;
 	notes?: string;
+	paymentIntentId?: string; // Stripe payment intent ID
+	paymentStatus?: string; // Stripe payment status
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -177,6 +179,14 @@ const DonationSchema: Schema = new Schema(
 			type: Date,
 		},
 		notes: {
+			type: String,
+		},
+		paymentIntentId: {
+			type: String,
+			unique: true,
+			sparse: true, // Allow null values but ensure uniqueness when present
+		},
+		paymentStatus: {
 			type: String,
 		},
 	},

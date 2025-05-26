@@ -1,13 +1,10 @@
-
-
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const MONGODB_URI =
-	process.env.MONGODB_URI ||
-	"mongodb+srv://shaileshlanet:shailesh2732@cluster0.vzeau.mongodb.net/charity_donation_db";
+	process.env.MONGODB_URI || "mongodb://localhost:27017/charity_donation";
 
 const connectDB = async (): Promise<void> => {
 	try {

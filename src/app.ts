@@ -14,6 +14,7 @@ import notificationRoutes from "./routes/notification.routes";
 import adminRoutes from "./routes/admin.routes";
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
+import paymentRoutes from "./routes/payment.routes";
 import { NotificationService } from "./services/notificationService";
 
 // Load environment variables
@@ -78,6 +79,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/payments", paymentRoutes);
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
