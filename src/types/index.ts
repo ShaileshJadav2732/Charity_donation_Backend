@@ -48,6 +48,7 @@ export interface IOrganizationProfile {
 }
 
 export interface AuthUser {
+	_id: any;
 	id: string;
 	email: string;
 	role: "donor" | "organization" | "admin";

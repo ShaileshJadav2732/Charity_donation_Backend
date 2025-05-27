@@ -142,29 +142,134 @@ export const getDonorDashboardStats = async (
 			((allDonors.length - 1) / allDonors.length) * 100
 		);
 
-		return res.json({
-			stats: {
-				totalDonations: totalDonations[0]?.total || 0,
-				donationGrowth: Math.round(donationGrowth * 100) / 100,
-				causesSupported: causesSupported.length,
-				activeCategories: activeCategories.length,
-				impactScore,
-				impactPercentile,
-				organizationsCount: organizationsSupported.length,
-				supportingOrganizations: organizationsSupported.length,
+		// Get monthly donation trends (last 6 months)
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+		const monthlyTrends = await Donation.aggregate([
+			{
+				$match: {
+					donor: donorId,
+					type: DonationType.MONEY,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+					createdAt: { $gte: sixMonthsAgo },
+				},
 			},
-			recentActivity: recentActivity.map((activity) => ({
-				id: activity._id,
-				type: "donation",
-				amount: activity.amount,
-				campaignName: activity.description,
-				timestamp: activity.createdAt,
-				organizationId: activity.organization._id,
-				organizationName: (activity.organization as any).name,
-			})),
+			{
+				$group: {
+					_id: {
+						year: { $year: "$createdAt" },
+						month: { $month: "$createdAt" },
+					},
+					amount: { $sum: "$amount" },
+					count: { $sum: 1 },
+				},
+			},
+			{
+				$sort: { "_id.year": 1, "_id.month": 1 },
+			},
+		]);
+
+		// Get donation distribution by type
+		const donationsByType = await Donation.aggregate([
+			{
+				$match: {
+					donor: donorId,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+				},
+			},
+			{
+				$group: {
+					_id: "$type",
+					count: { $sum: 1 },
+					totalAmount: {
+						$sum: {
+							$cond: [{ $eq: ["$type", DonationType.MONEY] }, "$amount", 0],
+						},
+					},
+				},
+			},
+		]);
+
+		// Get top causes by donation amount
+		const topCauses = await Donation.aggregate([
+			{
+				$match: {
+					donor: donorId,
+					type: DonationType.MONEY,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+				},
+			},
+			{
+				$lookup: {
+					from: "causes",
+					localField: "cause",
+					foreignField: "_id",
+					as: "causeInfo",
+				},
+			},
+			{
+				$unwind: "$causeInfo",
+			},
+			{
+				$group: {
+					_id: "$cause",
+					causeName: { $first: "$causeInfo.title" },
+					totalAmount: { $sum: "$amount" },
+					donationCount: { $sum: 1 },
+				},
+			},
+			{
+				$sort: { totalAmount: -1 },
+			},
+			{
+				$limit: 5,
+			},
+		]);
+
+		return res.json({
+			success: true,
+			data: {
+				stats: {
+					totalDonations: totalDonations[0]?.total || 0,
+					donationGrowth: Math.round(donationGrowth * 100) / 100,
+					causesSupported: causesSupported.length,
+					activeCategories: activeCategories.length,
+					impactScore,
+					impactPercentile,
+					organizationsCount: organizationsSupported.length,
+					supportingOrganizations: organizationsSupported.length,
+					totalDonationCount: allDonations,
+				},
+				charts: {
+					monthlyTrends: monthlyTrends.map((trend) => ({
+						month: `${trend._id.year}-${String(trend._id.month).padStart(2, "0")}`,
+						amount: trend.amount,
+						count: trend.count,
+					})),
+					donationsByType: donationsByType.map((type) => ({
+						type: type._id,
+						count: type.count,
+						amount: type.totalAmount,
+					})),
+					topCauses: topCauses.map((cause) => ({
+						name: cause.causeName,
+						amount: cause.totalAmount,
+						count: cause.donationCount,
+					})),
+				},
+				recentActivity: recentActivity.map((activity) => ({
+					id: activity._id,
+					type: "donation",
+					amount: activity.amount,
+					campaignName: activity.description,
+					timestamp: activity.createdAt,
+					organizationId: activity.organization._id,
+					organizationName: (activity.organization as any).name,
+				})),
+			},
 		});
 	} catch (error) {
-		console.error("Error fetching dashboard stats:", error);
 		return res.status(500).json({ message: "Internal server error" });
 	}
 };
@@ -175,7 +280,57 @@ export const getOrganizationDashboardStats = async (
 	res: Response
 ) => {
 	try {
-		const organizationId = req.user!._id;
+		const userId = req.user!._id;
+
+		// Find the organization profile for this user
+		const organization = await Organization.findOne({ userId });
+		if (!organization) {
+			return res.status(404).json({
+				success: false,
+				message: "Organization profile not found",
+			});
+		}
+
+		const organizationId = organization._id;
+		console.log("=== ORGANIZATION DASHBOARD DEBUG ===");
+		console.log("Organization ID:", organizationId);
+		console.log("User ID:", userId);
+		console.log("Organization found:", !!organization);
+
+		// Check what campaigns exist for debugging
+		const allCampaigns = await Campaign.find({}).limit(10);
+		console.log("Total campaigns in database:", allCampaigns.length);
+		console.log(
+			"Sample campaigns in database:",
+			allCampaigns.map((c) => ({
+				id: c._id,
+				title: c.title,
+				organizations: c.organizations,
+				status: c.status,
+			}))
+		);
+
+		// Check campaigns for this organization specifically
+		const orgCampaigns = await Campaign.find({ organizations: organizationId });
+		console.log("Campaigns for this organization:", orgCampaigns.length);
+		console.log(
+			"Organization campaigns details:",
+			orgCampaigns.map((c) => ({
+				id: c._id,
+				title: c.title,
+				status: c.status,
+				organizations: c.organizations,
+			}))
+		);
+
+		// Also check if organization ID is in any campaign's organizations array
+		const campaignsWithThisOrg = await Campaign.find({
+			organizations: { $in: [organizationId] },
+		});
+		console.log(
+			"Campaigns containing this org (alternative query):",
+			campaignsWithThisOrg.length
+		);
 
 		// Get total donations
 		const donationStats = await Donation.aggregate([
@@ -199,6 +354,7 @@ export const getOrganizationDashboardStats = async (
 		]);
 
 		// Get campaign stats
+		console.log("Getting campaign stats for organization:", organizationId);
 		const campaignStats = await Campaign.aggregate([
 			{
 				$match: { organizations: new mongoose.Types.ObjectId(organizationId) },
@@ -235,6 +391,8 @@ export const getOrganizationDashboardStats = async (
 				},
 			},
 		]);
+
+		console.log("Campaign stats result:", campaignStats);
 
 		// Get cause stats
 		const causeStats = await Cause.aggregate([
@@ -352,31 +510,169 @@ export const getOrganizationDashboardStats = async (
 				.populate("donor", "firstName lastName"),
 		]);
 
+		// Get monthly donation trends for organization
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+		const monthlyDonationTrends = await Donation.aggregate([
+			{
+				$match: {
+					organization: new mongoose.Types.ObjectId(organizationId),
+					type: DonationType.MONEY,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+					createdAt: { $gte: sixMonthsAgo },
+				},
+			},
+			{
+				$group: {
+					_id: {
+						year: { $year: "$createdAt" },
+						month: { $month: "$createdAt" },
+					},
+					amount: { $sum: "$amount" },
+					count: { $sum: 1 },
+				},
+			},
+			{
+				$sort: { "_id.year": 1, "_id.month": 1 },
+			},
+		]);
+
+		// Get donation distribution by type
+		const donationsByType = await Donation.aggregate([
+			{
+				$match: {
+					organization: new mongoose.Types.ObjectId(organizationId),
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+				},
+			},
+			{
+				$group: {
+					_id: "$type",
+					count: { $sum: 1 },
+					totalAmount: {
+						$sum: {
+							$cond: [{ $eq: ["$type", DonationType.MONEY] }, "$amount", 0],
+						},
+					},
+				},
+			},
+		]);
+
+		// Get top donors
+		const topDonors = await Donation.aggregate([
+			{
+				$match: {
+					organization: new mongoose.Types.ObjectId(organizationId),
+					type: DonationType.MONEY,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+				},
+			},
+			{
+				$lookup: {
+					from: "users",
+					localField: "donor",
+					foreignField: "_id",
+					as: "donorInfo",
+				},
+			},
+			{
+				$unwind: "$donorInfo",
+			},
+			{
+				$group: {
+					_id: "$donor",
+					donorEmail: { $first: "$donorInfo.email" },
+					totalAmount: { $sum: "$amount" },
+					donationCount: { $sum: 1 },
+				},
+			},
+			{
+				$sort: { totalAmount: -1 },
+			},
+			{
+				$limit: 5,
+			},
+		]);
+
+		// Get campaign performance
+		const campaignPerformance = await Campaign.aggregate([
+			{
+				$match: { organizations: new mongoose.Types.ObjectId(organizationId) },
+			},
+			{
+				$project: {
+					title: 1,
+					totalTargetAmount: 1,
+					totalRaisedAmount: 1,
+					achievementRate: {
+						$multiply: [
+							{ $divide: ["$totalRaisedAmount", "$totalTargetAmount"] },
+							100,
+						],
+					},
+					status: 1,
+				},
+			},
+			{
+				$sort: { achievementRate: -1 },
+			},
+			{
+				$limit: 5,
+			},
+		]);
+
 		res.status(200).json({
 			success: true,
 			data: {
-				donations: donationStats[0] || {
-					totalAmount: 0,
-					totalDonations: 0,
-					averageDonation: 0,
+				stats: {
+					donations: donationStats[0] || {
+						totalAmount: 0,
+						totalDonations: 0,
+						averageDonation: 0,
+					},
+					campaigns: campaignStats[0] || {
+						totalCampaigns: 0,
+						activeCampaigns: 0,
+						totalTargetAmount: 0,
+						totalRaisedAmount: 0,
+						achievementRate: 0,
+					},
+					causes: causeStats[0] || {
+						totalCauses: 0,
+						totalTargetAmount: 0,
+						totalRaisedAmount: 0,
+						achievementRate: 0,
+					},
+					feedback: feedbackStats[0] || {
+						totalFeedback: 0,
+						averageRating: 0,
+						ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+					},
 				},
-				campaigns: campaignStats[0] || {
-					totalCampaigns: 0,
-					activeCampaigns: 0,
-					totalTargetAmount: 0,
-					totalRaisedAmount: 0,
-					achievementRate: 0,
-				},
-				causes: causeStats[0] || {
-					totalCauses: 0,
-					totalTargetAmount: 0,
-					totalRaisedAmount: 0,
-					achievementRate: 0,
-				},
-				feedback: feedbackStats[0] || {
-					totalFeedback: 0,
-					averageRating: 0,
-					ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+				charts: {
+					monthlyTrends: monthlyDonationTrends.map((trend) => ({
+						month: `${trend._id.year}-${String(trend._id.month).padStart(2, "0")}`,
+						amount: trend.amount,
+						count: trend.count,
+					})),
+					donationsByType: donationsByType.map((type) => ({
+						type: type._id,
+						count: type.count,
+						amount: type.totalAmount,
+					})),
+					topDonors: topDonors.map((donor) => ({
+						email: donor.donorEmail,
+						amount: donor.totalAmount,
+						count: donor.donationCount,
+					})),
+					campaignPerformance: campaignPerformance.map((campaign) => ({
+						title: campaign.title,
+						targetAmount: campaign.totalTargetAmount,
+						raisedAmount: campaign.totalRaisedAmount,
+						achievementRate: Math.round(campaign.achievementRate * 100) / 100,
+						status: campaign.status,
+					})),
 				},
 				recentActivities: {
 					donations: recentActivities[0],

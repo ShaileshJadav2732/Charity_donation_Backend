@@ -87,16 +87,9 @@ export const createDonation = async (req: Request, res: Response) => {
 							donationId: donation._id.toString(),
 						}
 					);
-					console.log(
-						`Real-time notification created for organization user ${orgDoc.userId}`
-					);
 					orgNotificationStatus = "Real-time notification created successfully";
 				}
 			} catch (notificationError) {
-				console.error(
-					`Failed to create real-time notification for organization of donation ${donation._id}:`,
-					notificationError
-				);
 				orgNotificationStatus = "Failed to create real-time notification";
 			}
 		}
@@ -116,10 +109,6 @@ export const createDonation = async (req: Request, res: Response) => {
 				);
 				orgEmailStatus = "Email sent successfully to organization";
 			} catch (emailError) {
-				console.error(
-					`Failed to send email to organization for donation ${donation._id}:`,
-					emailError
-				);
 				orgEmailStatus = "Failed to send email to organization";
 			}
 		}
@@ -291,14 +280,11 @@ export const getDonorStats = async (req: Request, res: Response) => {
 			totalCauses: causesSupported[0]?.totalCauses || 0,
 		};
 
-		console.log("Donor stats calculated:", response);
-
 		res.status(200).json({
 			success: true,
 			data: response,
 		});
 	} catch (error) {
-		console.error("Failed to fetch stats:", error);
 		res.status(500).json({
 			success: false,
 			message: "Something went wrong",
@@ -479,10 +465,6 @@ export const getItemDonationTypeAnalytics = async (
 			data: response,
 		});
 	} catch (error) {
-		console.error(
-			`Failed to fetch ${req.params.type} donation analytics:`,
-			error
-		);
 		res.status(500).json({
 			success: false,
 			message: "Something went wrong",

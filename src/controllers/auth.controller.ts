@@ -51,9 +51,7 @@ export const register = async (req: Request, res: Response) => {
 			profileCompleted: false,
 		});
 
-		console.log("Creating new user:", newUser);
 		await newUser.save();
-		console.log("User saved successfully with ID:", newUser._id);
 
 		// Generate JWT token
 		const token = jwt.sign(
@@ -73,7 +71,6 @@ export const register = async (req: Request, res: Response) => {
 			token,
 		});
 	} catch (error) {
-		console.error("Registration error:", error);
 		return res
 			.status(500)
 			.json({ message: "Server error during registration" });
@@ -83,24 +80,18 @@ export const register = async (req: Request, res: Response) => {
 // Login user
 export const login = async (req: Request, res: Response) => {
 	try {
-		console.log("Login request body:", req.body);
 		const { firebaseUid } = req.body;
 
 		if (!firebaseUid) {
-			console.log("Missing firebaseUid in login request");
 			return res.status(400).json({ message: "Firebase UID is required" });
 		}
 
 		// Find user by Firebase UID
-		console.log("Looking for user with firebaseUid:", firebaseUid);
 		const user = await User.findOne({ firebaseUid });
 
 		if (!user) {
-			console.log("User not found with firebaseUid:", firebaseUid);
 			return res.status(404).json({ message: "User not found" });
 		}
-
-		console.log("User found:", user);
 
 		// Generate JWT token
 		const token = jwt.sign(
@@ -120,7 +111,6 @@ export const login = async (req: Request, res: Response) => {
 			token,
 		});
 	} catch (error) {
-		console.error("Login error:", error);
 		return res.status(500).json({ message: "Server error during login" });
 	}
 };
@@ -128,29 +118,21 @@ export const login = async (req: Request, res: Response) => {
 // Verify Firebase token and return user data
 export const verifyFirebaseToken = async (req: Request, res: Response) => {
 	try {
-		console.log("Verify token request body:", req.body);
 		const { idToken } = req.body;
 
 		if (!idToken) {
-			console.log("Missing idToken in verify request");
 			return res.status(400).json({ message: "ID token is required" });
 		}
 
 		// Verify the Firebase token
-		console.log("Verifying Firebase token...");
 		const decodedToken = await admin.auth().verifyIdToken(idToken);
-		console.log("Token verified, decoded token:", decodedToken);
 
 		// Find user by Firebase UID
-		console.log("Looking for user with firebaseUid:", decodedToken.uid);
 		const user = await User.findOne({ firebaseUid: decodedToken.uid });
 
 		if (!user) {
-			console.log("User not found with firebaseUid:", decodedToken.uid);
 			return res.status(404).json({ message: "User not found in database" });
 		}
-
-		console.log("User found:", user);
 
 		// Generate JWT token
 		const token = jwt.sign(
@@ -170,7 +152,6 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 			token,
 		});
 	} catch (error) {
-		console.error("Token verification error:", error);
 		return res.status(401).json({ message: "Invalid or expired token" });
 	}
 };
@@ -197,7 +178,6 @@ export const getCurrentUser = async (req: AuthRequest, res: Response) => {
 			},
 		});
 	} catch (error) {
-		console.error("Get current user error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };

@@ -32,8 +32,8 @@ app.use(
 		origin: "http://localhost:3000",
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		// 	// allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-		// 	exposedHeaders: ["Content-Disposition"],
+		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+		exposedHeaders: ["Content-Disposition"],
 	})
 );
 
@@ -74,6 +74,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
 app.use("/api/campaigns", campaignRoutes);
+console.log("Registering feedback routes at /api/feedback");
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);

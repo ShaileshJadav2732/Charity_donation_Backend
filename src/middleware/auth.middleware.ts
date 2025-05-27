@@ -21,7 +21,8 @@ export const authenticate = async (
 	next: NextFunction
 ) => {
 	try {
-		const token = req.headers.authorization?.split(" ")[1];
+		const authHeader = req.headers.authorization;
+		const token = authHeader?.split(" ")[1];
 
 		if (!token) {
 			return res.status(401).json({ message: "No token provided" });
@@ -30,6 +31,7 @@ export const authenticate = async (
 		const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
 			id: string;
 		};
+
 		const user = await User.findById(decoded.id);
 
 		if (!user) {
@@ -37,6 +39,7 @@ export const authenticate = async (
 		}
 
 		req.user = {
+			_id: user._id,
 			id: user._id.toString(),
 			email: user.email,
 			role: user.role,
@@ -75,6 +78,7 @@ export const verifyFirebaseToken = async (
 		}
 
 		req.user = {
+			_id: user._id,
 			id: user._id.toString(),
 			email: user.email,
 			role: user.role,

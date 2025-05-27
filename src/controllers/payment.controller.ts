@@ -35,7 +35,7 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 	try {
 		console.log("=== CREATE PAYMENT INTENT REQUEST ===");
 		console.log("Request body:", JSON.stringify(req.body, null, 2));
-		console.log("User:", req.user?._id);
+		console.log("User:", req.user?.id);
 
 		const {
 			amount,
@@ -47,7 +47,7 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 			contactEmail,
 		}: CreatePaymentIntentRequest = req.body;
 
-		if (!req.user?._id) {
+		if (!req.user?.id) {
 			console.log("ERROR: User not authenticated");
 			return res.status(401).json({ message: "User not authenticated" });
 		}
@@ -91,7 +91,7 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 			currency: STRIPE_CONFIG.currency,
 			automatic_payment_methods: STRIPE_CONFIG.automatic_payment_methods,
 			metadata: {
-				donorId: req.user._id.toString(),
+				donorId: req.user.id.toString(),
 				causeId: cause,
 				organizationId: organization,
 				campaignId: campaign || "",
@@ -118,11 +118,11 @@ export const confirmPayment = async (req: Request, res: Response) => {
 	try {
 		console.log("=== CONFIRM PAYMENT REQUEST ===");
 		console.log("Request body:", JSON.stringify(req.body, null, 2));
-		console.log("User:", req.user?._id);
+		console.log("User:", req.user?.id);
 
 		const { paymentIntentId, donationData }: ConfirmPaymentRequest = req.body;
 
-		if (!req.user?._id) {
+		if (!req.user?.id) {
 			console.log("ERROR: User not authenticated");
 			return res.status(401).json({ message: "User not authenticated" });
 		}
@@ -150,7 +150,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 		}
 
 		// Verify the payment belongs to the authenticated user
-		if (paymentIntent.metadata.donorId !== req.user._id.toString()) {
+		if (paymentIntent.metadata.donorId !== req.user.id.toString()) {
 			return res.status(403).json({
 				message: "Payment does not belong to authenticated user",
 			});
@@ -170,7 +170,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 		console.log("Creating donation record...");
 		// Create donation record
 		const donation = new Donation({
-			donor: req.user._id,
+			donor: req.user.id,
 			organization: donationData.organization,
 			campaign: donationData.campaign || undefined,
 			cause: donationData.cause,
