@@ -38,8 +38,6 @@ export const getCurrentOrganization = catchAsync(
 
 		const org = await Organization.findOne({ userId });
 
-		console.log("org", org);
-
 		return res.status(200).json({
 			message: "Organization Profile",
 			organization: org,

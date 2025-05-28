@@ -7,9 +7,8 @@ import Donation, { DonationType } from "../models/donation.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
-import { validateObjectId } from "../utils/validation";
 
-interface AuthRequest extends Request {
+interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }
 
@@ -54,13 +53,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 	const query: any = {};
 
 	// Log query parameters for debugging
-	console.log("Campaign query parameters:", {
-		organization,
-		organizations,
-		status,
-		cause,
-		search,
-	});
 
 	// Handle text search
 	if (search) {
@@ -74,26 +66,12 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 
 	// Handle organization filter - check for specific organization
 	if (organization) {
-		if (!validateObjectId(organization as string)) {
-			throw new AppError("Invalid organization ID", 400);
-		}
 		query.organizations = organization;
 	}
-
-	// Handle organizations filter - used from frontend
 	if (organizations) {
-		if (!validateObjectId(organizations as string)) {
-			throw new AppError("Invalid organizations parameter", 400);
-		}
-		// Use $in to match any ID in the organizations array
 		query.organizations = { $in: [organizations] };
 	}
-
-	// Handle cause filter
 	if (cause) {
-		if (!validateObjectId(cause as string)) {
-			throw new AppError("Invalid cause ID", 400);
-		}
 		query.causes = cause;
 	}
 
@@ -108,9 +86,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 		if (startDate) query.startDate.$gte = new Date(startDate as string);
 		if (endDate) query.startDate.$lte = new Date(endDate as string);
 	}
-
-	// Log the final query for debugging
-	console.log("Final campaign query:", query);
 
 	const sort: any = {};
 	sort[sortBy as string] = sortOrder === "desc" ? -1 : 1;
@@ -127,9 +102,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 		Campaign.countDocuments(query),
 	]);
 
-	// Log the found campaigns
-	console.log(`Found ${campaigns.length} campaigns`);
-
 	res.status(200).json({
 		success: true,
 		data: campaigns.map(formatCampaignResponse),
@@ -145,10 +117,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 export const getCampaignById = catchAsync(
 	async (req: Request, res: Response) => {
 		const { campaignId } = req.params;
-
-		if (!validateObjectId(campaignId)) {
-			throw new AppError("Invalid campaign ID", 400);
-		}
 
 		const campaign = await Campaign.findById(campaignId)
 			.populate("organizationId", "name email phone address")
@@ -170,10 +138,6 @@ export const getCampaignDetails = catchAsync(
 	async (req: Request, res: Response) => {
 		try {
 			const { campaignId } = req.params;
-
-			if (!validateObjectId(campaignId)) {
-				throw new AppError("Invalid campaign ID format", 400);
-			}
 
 			const campaign = await Campaign.findById(campaignId)
 				.populate("organizations", "name email phone address")
@@ -248,24 +212,9 @@ export const createCampaign = catchAsync(
 			throw new AppError("Missing required fields", 400);
 		}
 
-		// Check if organizations field exists and includes the user's organization
-		// const userIdForCreate = req.user!._id;
-		// if (!organizations || !organizations.includes(userIdForCreate)) {
-		// 	throw new AppError("You must include your own organization ID", 403);
-		// }
-
 		if (totalTargetAmount <= 0) {
 			throw new AppError("Target amount must be greater than 0", 400);
 		}
-
-		// const validCauses = await Cause.find({
-		// 	_id: { $in: causes },
-		// 	organizationId: req.user._id,
-		// });
-
-		// if (validCauses.length !== causes.length) {
-		// 	throw new AppError("Invalid or unauthorized cause IDs", 400);
-		// }
 
 		const start = new Date(startDate);
 		const end = new Date(endDate);
@@ -337,27 +286,11 @@ export const updateCampaign = catchAsync(
 
 		const { campaignId } = req.params;
 
-		if (!validateObjectId(campaignId)) {
-			throw new AppError("Invalid campaign ID", 400);
-		}
-
 		const campaign = await Campaign.findById(campaignId);
 
 		if (!campaign) {
 			throw new AppError("Campaign not found", 404);
 		}
-
-		// const userIdForUpdate = req.user!._id;
-		// if (
-		// 	!campaign.organizations.some(
-		// 		(orgId) => orgId.toString() === userIdForUpdate
-		// 	)
-		// ) {
-		// 	throw new AppError(
-		// 		"Unauthorized: You do not have permission to update this campaign",
-		// 		403
-		// 	);
-		// }
 
 		const {
 			title,
@@ -459,47 +392,30 @@ export const deleteCampaign = catchAsync(
 			}
 
 			const { campaignId } = req.params;
-			console.log(`Attempting to delete campaign with ID: ${campaignId}`);
-
-			// Validate ID format
-			if (!validateObjectId(campaignId)) {
-				throw new AppError("Invalid campaign ID format", 400);
-			}
 
 			// Find the campaign
 			const campaign = await Campaign.findById(campaignId);
 			if (!campaign) {
-				console.log(`Campaign not found with ID: ${campaignId}`);
 				throw new AppError("Campaign not found", 404);
 			}
 
 			// Check if user has permission to delete
 			const userIdForDelete = req.user!._id.toString();
-			console.log(
-				`User ID: ${userIdForDelete}, Campaign Orgs: ${campaign.organizations}`
-			);
 
 			const hasPermission = campaign.organizations.some(
 				(orgId) => orgId.toString() === userIdForDelete
 			);
 
 			if (!hasPermission) {
-				console.log(
-					`User ${userIdForDelete} not authorized to delete campaign ${campaignId}`
-				);
 				throw new AppError(
 					"Unauthorized: You do not have permission to delete this campaign",
 					403
 				);
 			}
 
-			// Check if the campaign has donations
 			// If it does, prevent deletion or mark as cancelled instead
 			const donations = await Donation.countDocuments({ campaign: campaignId });
 			if (donations > 0) {
-				console.log(
-					`Campaign ${campaignId} has ${donations} donations - marking as cancelled instead of deleting`
-				);
 				campaign.status = "cancelled";
 				await campaign.save();
 				return res.status(200).json({
@@ -511,10 +427,6 @@ export const deleteCampaign = catchAsync(
 
 			// Delete the campaign
 			const result = await campaign.deleteOne();
-			console.log(
-				`Successfully deleted campaign with ID: ${campaignId}`,
-				result
-			);
 
 			// Return success response with detailed message
 			return res.status(200).json({
@@ -542,10 +454,6 @@ export const addCauseToCampaign = catchAsync(
 
 		const { campaignId } = req.params;
 		const { causeId } = req.body;
-
-		if (!validateObjectId(campaignId) || !validateObjectId(causeId)) {
-			throw new AppError("Invalid campaign or cause ID", 400);
-		}
 
 		const [campaign, cause] = await Promise.all([
 			Campaign.findById(campaignId),
@@ -608,10 +516,6 @@ export const removeCauseFromCampaign = catchAsync(
 		}
 
 		const { campaignId, causeId } = req.params;
-
-		if (!validateObjectId(campaignId) || !validateObjectId(causeId)) {
-			throw new AppError("Invalid campaign or cause ID", 400);
-		}
 
 		const campaign = await Campaign.findById(campaignId);
 

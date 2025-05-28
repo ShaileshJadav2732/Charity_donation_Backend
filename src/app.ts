@@ -9,9 +9,9 @@ import profileRoutes from "./routes/profile.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import causeRoutes from "./routes/cause.routes";
 import campaignRoutes from "./routes/campaign.routes";
-import feedbackRoutes from "./routes/feedback.routes";
+
 import notificationRoutes from "./routes/notification.routes";
-import adminRoutes from "./routes/admin.routes";
+
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
@@ -75,9 +75,9 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
 app.use("/api/campaigns", campaignRoutes);
 console.log("Registering feedback routes at /api/feedback");
-app.use("/api/feedback", feedbackRoutes);
+
 app.use("/api/notifications", notificationRoutes);
-app.use("/api/admin", adminRoutes);
+
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
 app.use("/api/payments", paymentRoutes);

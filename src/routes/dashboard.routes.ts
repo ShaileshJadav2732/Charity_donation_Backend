@@ -12,7 +12,11 @@ const router = express.Router();
 router.use(authenticate);
 
 // Get donor dashboard stats
-router.get("/donor", authorize(["donor"]), getDonorDashboardStats);
+router.get(
+	"/donor",
+	authorize(["donor"]),
+	getDonorDashboardStats as express.RequestHandler
+);
 
 // Get organization dashboard stats
 router.get(

@@ -612,8 +612,6 @@ export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 			topCauses,
 		};
 
-		console.log("Item donation analytics calculated");
-
 		res.status(200).json({
 			success: true,
 			data: response,
@@ -634,9 +632,6 @@ export const findOrganizationPendingDonations = async (
 	try {
 		// Get organization ID from request params
 		const { organizationId } = req.params;
-		console.log("Backend - Received organizationId:", organizationId);
-		console.log("Backend - Full request params:", req.params);
-		console.log("Backend - Query parameters:", req.query);
 
 		// Verify the organization ID is valid
 		if (!organizationId) {
@@ -651,12 +646,6 @@ export const findOrganizationPendingDonations = async (
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 10;
 
-		console.log("Backend - Query parameters after parsing:", {
-			status,
-			page,
-			limit,
-		});
-
 		// Create query based on inputs
 		const donations = await Donation.find({
 			organization: organizationId,
@@ -668,17 +657,11 @@ export const findOrganizationPendingDonations = async (
 			.skip((page - 1) * limit)
 			.limit(limit);
 
-		console.log("Backend - Found donations:", donations);
-
 		// Get total count for pagination
 		const total = await Donation.countDocuments({
 			organization: organizationId,
 			status: status,
 		});
-
-		console.log(
-			`Backend - Found ${donations.length} donations out of ${total} total`
-		);
 
 		// Return the results
 		res.status(200).json({
@@ -788,9 +771,6 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			if (cause) {
 				cause.raisedAmount += donation.amount;
 				await cause.save();
-				console.log(
-					`Updated cause ${cause._id} raisedAmount to ${cause.raisedAmount}`
-				);
 			}
 		}
 
@@ -835,9 +815,7 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
 				);
-				console.log(
-					`Real-time notification created for donor ${donation.donor._id}`
-				);
+
 				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(
@@ -872,12 +850,6 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 // Mark donation as received with photo upload
 export const markDonationAsReceived = async (req: Request, res: Response) => {
 	try {
-		console.log("markDonationAsReceived called");
-		console.log("Request headers:", req.headers);
-		console.log("Request body:", req.body);
-		console.log("Request files:", req.file || "No file");
-		console.log("Request params:", req.params);
-
 		// Check if user is authenticated
 		if (!req.user?._id) {
 			console.error("User not authenticated");
@@ -887,11 +859,8 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			});
 		}
 
-		console.log("User authenticated:", req.user._id);
-
 		// Get donation ID from request params
 		const { donationId } = req.params;
-		console.log("Donation ID from params:", donationId);
 
 		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
@@ -910,8 +879,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 				message: "Photo is required to mark donation as received",
 			});
 		}
-
-		console.log("Received file:", req.file);
 
 		// Find the donation
 		const donation = await Donation.findById(donationId)
@@ -975,9 +942,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			if (cause) {
 				cause.raisedAmount += donation.amount;
 				await cause.save();
-				console.log(
-					`Updated cause ${cause._id} raisedAmount to ${cause.raisedAmount}`
-				);
 			}
 		}
 
@@ -1024,9 +988,7 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
 				);
-				console.log(
-					`Real-time notification created for donor ${donation.donor._id}`
-				);
+
 				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(
@@ -1147,7 +1109,6 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 			};
 
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
-			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
 		} catch (pdfError) {
 			console.error("Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
@@ -1275,12 +1236,6 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 // Mark donation as confirmed with receipt upload (for organizations)
 export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 	try {
-		console.log("markDonationAsConfirmed called");
-		console.log("Request headers:", req.headers);
-		console.log("Request body:", req.body);
-		console.log("Request files:", req.file || "No file");
-		console.log("Request params:", req.params);
-
 		// Check if user is authenticated
 		if (!req.user?._id) {
 			console.error("User not authenticated");
@@ -1366,7 +1321,6 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			};
 
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
-			console.log("PDF receipt generated successfully:", pdfReceiptUrl);
 		} catch (pdfError) {
 			console.error("Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
@@ -1436,9 +1390,7 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
 				);
-				console.log(
-					`Real-time notification created for donor ${donation.donor._id}`
-				);
+
 				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
 				console.error(

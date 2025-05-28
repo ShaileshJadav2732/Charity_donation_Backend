@@ -14,12 +14,10 @@ if (!JWT_SECRET) {
 // Register a new user
 export const register = async (req: Request, res: Response) => {
 	try {
-		console.log("Register request body:", req.body);
 		const { email, firebaseUid, role } = req.body;
 
 		// Validate input
 		if (!email || !firebaseUid || !role) {
-			console.log("Missing required fields:", { email, firebaseUid, role });
 			return res
 				.status(400)
 				.json({ message: "Email, firebaseUid, and role are required" });
@@ -28,7 +26,6 @@ export const register = async (req: Request, res: Response) => {
 		// Check if user already exists by email
 		const existingUserByEmail = await User.findOne({ email });
 		if (existingUserByEmail) {
-			console.log("User already exists with email:", email);
 			return res
 				.status(400)
 				.json({ message: "User already exists with this email" });
@@ -37,7 +34,6 @@ export const register = async (req: Request, res: Response) => {
 		// Check if user already exists by firebaseUid
 		const existingUserByUid = await User.findOne({ firebaseUid });
 		if (existingUserByUid) {
-			console.log("User already exists with firebaseUid:", firebaseUid);
 			return res
 				.status(400)
 				.json({ message: "User already exists with this Firebase ID" });

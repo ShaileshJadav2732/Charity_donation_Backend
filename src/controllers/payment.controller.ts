@@ -1,13 +1,12 @@
 import { Request, Response } from "express";
 import { stripe, STRIPE_CONFIG } from "../config/stripe";
+import Cause from "../models/cause.model";
 import Donation, {
 	DonationStatus,
 	DonationType,
 } from "../models/donation.model";
-import Cause from "../models/cause.model";
 import Organization from "../models/organization.model";
 import { sendEmail } from "../utils/email";
-import { IUser } from "../types";
 
 interface CreatePaymentIntentRequest {
 	amount: number;
@@ -33,10 +32,6 @@ interface ConfirmPaymentRequest {
 
 export const createPaymentIntent = async (req: Request, res: Response) => {
 	try {
-		console.log("=== CREATE PAYMENT INTENT REQUEST ===");
-		console.log("Request body:", JSON.stringify(req.body, null, 2));
-		console.log("User:", req.user?.id);
-
 		const {
 			amount,
 			cause,
@@ -48,18 +43,11 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 		}: CreatePaymentIntentRequest = req.body;
 
 		if (!req.user?.id) {
-			console.log("ERROR: User not authenticated");
 			return res.status(401).json({ message: "User not authenticated" });
 		}
 
 		// Validate required fields
 		if (!amount || !cause || !organization || !description) {
-			console.log("ERROR: Missing required fields:", {
-				amount: !!amount,
-				cause: !!cause,
-				organization: !!organization,
-				description: !!description,
-			});
 			return res.status(400).json({
 				message: "Amount, cause, organization, and description are required",
 			});
@@ -67,7 +55,6 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 
 		// Validate amount (minimum $1)
 		if (amount < 1) {
-			console.log("ERROR: Amount too small:", amount);
 			return res.status(400).json({
 				message: "Amount must be at least $1",
 			});
@@ -116,33 +103,20 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 
 export const confirmPayment = async (req: Request, res: Response) => {
 	try {
-		console.log("=== CONFIRM PAYMENT REQUEST ===");
-		console.log("Request body:", JSON.stringify(req.body, null, 2));
-		console.log("User:", req.user?.id);
-
 		const { paymentIntentId, donationData }: ConfirmPaymentRequest = req.body;
 
 		if (!req.user?.id) {
-			console.log("ERROR: User not authenticated");
 			return res.status(401).json({ message: "User not authenticated" });
 		}
 
 		if (!paymentIntentId) {
-			console.log("ERROR: Payment intent ID missing");
 			return res.status(400).json({ message: "Payment intent ID is required" });
 		}
 
-		console.log("Retrieving payment intent from Stripe:", paymentIntentId);
 		// Retrieve payment intent from Stripe
 		const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-		console.log("Payment intent status:", paymentIntent.status);
-		console.log("Payment intent amount:", paymentIntent.amount);
 
 		if (paymentIntent.status !== "succeeded") {
-			console.log(
-				"ERROR: Payment not succeeded, status:",
-				paymentIntent.status
-			);
 			return res.status(400).json({
 				message: "Payment has not been completed successfully",
 				status: paymentIntent.status,
@@ -167,7 +141,6 @@ export const confirmPayment = async (req: Request, res: Response) => {
 			});
 		}
 
-		console.log("Creating donation record...");
 		// Create donation record
 		const donation = new Donation({
 			donor: req.user.id,
@@ -184,12 +157,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 			isPickup: false, // Monetary donations don't require pickup
 		});
 
-		console.log(
-			"Donation data to save:",
-			JSON.stringify(donation.toObject(), null, 2)
-		);
 		await donation.save();
-		console.log("Donation saved successfully with ID:", donation._id);
 
 		// Update cause raised amount
 		const cause = await Cause.findById(donationData.cause);
@@ -258,16 +226,14 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	switch (event.type) {
 		case "payment_intent.succeeded":
 			const paymentIntent = event.data.object;
-			console.log("Payment succeeded:", paymentIntent.id);
+
 			// Additional processing if needed
 			break;
 		case "payment_intent.payment_failed":
 			const failedPayment = event.data.object;
-			console.log("Payment failed:", failedPayment.id);
+
 			// Handle failed payment
 			break;
-		default:
-			console.log(`Unhandled event type ${event.type}`);
 	}
 
 	res.json({ received: true });

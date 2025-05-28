@@ -7,14 +7,13 @@ import Organization from "../models/organization.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
-import { validateObjectId } from "../utils/validation";
 
 // Extended Request interface with user property
 interface RequestWithUser extends Request {
 	user?: any; // Using any for now, but ideally should match your user type
 }
 
-interface AuthRequest extends Request {
+interface AuthRequest extends RequestWithUser {
 	user?: IUser;
 }
 
@@ -79,11 +78,8 @@ export const getCauses = catchAsync(async (req: Request, res: Response) => {
 export const getCauseById = catchAsync(
 	async (req: RequestWithUser, res: Response) => {
 		const causeId = req.params.id;
-		console.log(`[getCauseById] Request received for cause ID: ${causeId}`);
-		console.log(`[getCauseById] Request user:`, req.user);
 
 		if (!mongoose.Types.ObjectId.isValid(causeId)) {
-			console.log(`[getCauseById] Invalid cause ID format: ${causeId}`);
 			throw new AppError("Invalid cause ID", 400);
 		}
 
@@ -94,14 +90,10 @@ export const getCauseById = catchAsync(
 			);
 
 			if (!cause) {
-				console.log(`[getCauseById] Cause not found with ID: ${causeId}`);
 				throw new AppError("Cause not found", 404);
 			}
 
-			console.log(`[getCauseById] Successfully found cause: ${cause.title}`);
-
 			const formattedCause = formatCauseResponse(cause);
-			console.log(`[getCauseById] Formatted cause:`, formattedCause);
 
 			res.status(200).json({
 				cause: formattedCause,
@@ -226,7 +218,7 @@ export const updateCause = catchAsync(
 		if (!causeId) {
 			throw new AppError("Cause not found", 404);
 		}
-		console.log("--------------------", causeId);
+
 		// Check if user's organization owns the cause
 		if (!req.user._id && req.user.role === "organization") {
 			throw Error("User Is not Authenticated ");
@@ -419,8 +411,6 @@ export const getActiveCampaignCauses = catchAsync(
 		const tag = req.query.tag as string;
 
 		try {
-			console.log("Getting causes from active campaigns");
-
 			// First get all active campaigns
 			const activeCampaigns = await Campaign.find({ status: "active" }).select(
 				"_id causes"
@@ -437,10 +427,6 @@ export const getActiveCampaignCauses = catchAsync(
 					});
 				}
 			});
-
-			console.log(
-				`Found ${activeCausesIds.size} unique causes from active campaigns`
-			);
 
 			// Build query for causes
 			const query: any = {
@@ -466,8 +452,6 @@ export const getActiveCampaignCauses = catchAsync(
 					.populate("organizationId", "name"),
 				Cause.countDocuments(query),
 			]);
-
-			console.log(`Returning ${causes.length} causes from active campaigns`);
 
 			res.status(200).json({
 				causes: causes.map(formatCauseResponse),

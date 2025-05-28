@@ -5,10 +5,11 @@ import { DonationStatus, DonationType } from "../models/donation.model";
 import { IUser } from "../types";
 import Campaign from "../models/campaign.model";
 import Cause from "../models/cause.model";
-import Feedback from "../models/feedback.model";
+
 import mongoose from "mongoose";
 
-interface AuthRequest extends Request {
+// Override the Request type's user property with our IUser type
+interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }
 
@@ -17,7 +18,8 @@ export const getDonorDashboardStats = async (
 	res: Response
 ) => {
 	try {
-		const donorId = req.user?._id;
+		const authReq = req as AuthRequest;
+		const donorId = authReq.user?._id;
 
 		if (!donorId) {
 			return res.status(401).json({ message: "Unauthorized" });
@@ -292,45 +294,17 @@ export const getOrganizationDashboardStats = async (
 		}
 
 		const organizationId = organization._id;
-		console.log("=== ORGANIZATION DASHBOARD DEBUG ===");
-		console.log("Organization ID:", organizationId);
-		console.log("User ID:", userId);
-		console.log("Organization found:", !!organization);
 
 		// Check what campaigns exist for debugging
 		const allCampaigns = await Campaign.find({}).limit(10);
-		console.log("Total campaigns in database:", allCampaigns.length);
-		console.log(
-			"Sample campaigns in database:",
-			allCampaigns.map((c) => ({
-				id: c._id,
-				title: c.title,
-				organizations: c.organizations,
-				status: c.status,
-			}))
-		);
 
 		// Check campaigns for this organization specifically
 		const orgCampaigns = await Campaign.find({ organizations: organizationId });
-		console.log("Campaigns for this organization:", orgCampaigns.length);
-		console.log(
-			"Organization campaigns details:",
-			orgCampaigns.map((c) => ({
-				id: c._id,
-				title: c.title,
-				status: c.status,
-				organizations: c.organizations,
-			}))
-		);
 
 		// Also check if organization ID is in any campaign's organizations array
 		const campaignsWithThisOrg = await Campaign.find({
 			organizations: { $in: [organizationId] },
 		});
-		console.log(
-			"Campaigns containing this org (alternative query):",
-			campaignsWithThisOrg.length
-		);
 
 		// Get total donations
 		const donationStats = await Donation.aggregate([
@@ -354,7 +328,7 @@ export const getOrganizationDashboardStats = async (
 		]);
 
 		// Get campaign stats
-		console.log("Getting campaign stats for organization:", organizationId);
+
 		const campaignStats = await Campaign.aggregate([
 			{
 				$match: { organizations: new mongoose.Types.ObjectId(organizationId) },
@@ -392,8 +366,6 @@ export const getOrganizationDashboardStats = async (
 			},
 		]);
 
-		console.log("Campaign stats result:", campaignStats);
-
 		// Get cause stats
 		const causeStats = await Cause.aggregate([
 			{
@@ -429,66 +401,6 @@ export const getOrganizationDashboardStats = async (
 		]);
 
 		// Get feedback stats
-		const feedbackStats = await Feedback.aggregate([
-			{ $match: { organization: new mongoose.Types.ObjectId(organizationId) } },
-			{
-				$group: {
-					_id: null,
-					totalFeedback: { $sum: 1 },
-					averageRating: { $avg: "$rating" },
-					ratingDistribution: { $push: "$rating" },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					totalFeedback: 1,
-					averageRating: { $round: ["$averageRating", 1] },
-					ratingDistribution: {
-						1: {
-							$size: {
-								$filter: {
-									input: "$ratingDistribution",
-									cond: { $eq: ["$$this", 1] },
-								},
-							},
-						},
-						2: {
-							$size: {
-								$filter: {
-									input: "$ratingDistribution",
-									cond: { $eq: ["$$this", 2] },
-								},
-							},
-						},
-						3: {
-							$size: {
-								$filter: {
-									input: "$ratingDistribution",
-									cond: { $eq: ["$$this", 3] },
-								},
-							},
-						},
-						4: {
-							$size: {
-								$filter: {
-									input: "$ratingDistribution",
-									cond: { $eq: ["$$this", 4] },
-								},
-							},
-						},
-						5: {
-							$size: {
-								$filter: {
-									input: "$ratingDistribution",
-									cond: { $eq: ["$$this", 5] },
-								},
-							},
-						},
-					},
-				},
-			},
-		]);
 
 		// Get recent activities
 		const recentActivities = await Promise.all([
@@ -502,12 +414,6 @@ export const getOrganizationDashboardStats = async (
 			Campaign.find({ organizations: organizationId })
 				.sort({ createdAt: -1 })
 				.limit(5),
-
-			// Recent feedback
-			Feedback.find({ organization: organizationId })
-				.sort({ createdAt: -1 })
-				.limit(5)
-				.populate("donor", "firstName lastName"),
 		]);
 
 		// Get monthly donation trends for organization
@@ -644,11 +550,6 @@ export const getOrganizationDashboardStats = async (
 						totalRaisedAmount: 0,
 						achievementRate: 0,
 					},
-					feedback: feedbackStats[0] || {
-						totalFeedback: 0,
-						averageRating: 0,
-						ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-					},
 				},
 				charts: {
 					monthlyTrends: monthlyDonationTrends.map((trend) => ({
@@ -677,7 +578,6 @@ export const getOrganizationDashboardStats = async (
 				recentActivities: {
 					donations: recentActivities[0],
 					campaigns: recentActivities[1],
-					feedback: recentActivities[2],
 				},
 			},
 		});
