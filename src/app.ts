@@ -37,6 +37,8 @@ app.use(
 	})
 );
 
+
+app.use("/api/payments", paymentRoutes);
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -80,7 +82,7 @@ app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
-app.use("/api/payments", paymentRoutes);
+
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
