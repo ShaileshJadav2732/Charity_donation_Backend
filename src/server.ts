@@ -16,10 +16,15 @@ const server = createServer(app);
 // Setup Socket.IO
 const io = new Server(server, {
 	cors: {
-		origin: [ "http://localhost:3000", "http://localhost:3001",],
+		origin: ["http://localhost:3000", "http://localhost:3001"],
 		methods: ["GET", "POST"],
 		credentials: true,
 	},
+	pingTimeout: 60000, // 60 seconds
+	pingInterval: 25000, // 25 seconds
+	connectTimeout: 45000, // 45 seconds
+	transports: ["websocket", "polling"],
+	allowEIO3: true,
 });
 
 // Setup socket handlers

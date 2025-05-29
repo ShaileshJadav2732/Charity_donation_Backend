@@ -15,23 +15,36 @@ interface AuthRequest extends Omit<Request, "user"> {
 // Helper function to format campaign response
 const formatCampaignResponse = (
 	campaign: ICampaign & { _id: mongoose.Types.ObjectId }
-) => ({
-	_id: campaign._id.toString(),
-	title: campaign.title,
-	description: campaign.description,
-	startDate: campaign.startDate.toISOString(),
-	endDate: campaign.endDate.toISOString(),
-	status: campaign.status,
-	causes: campaign.causes, // Populated by Mongoose
-	organizations: campaign.organizations, // Changed from organizationId
-	totalTargetAmount: campaign.totalTargetAmount,
-	totalRaisedAmount: campaign.totalRaisedAmount,
-	totalSupporters: campaign.totalSupporters,
-	imageUrl: campaign.imageUrl,
-	acceptedDonationTypes: campaign.acceptedDonationTypes,
-	createdAt: campaign.createdAt.toISOString(),
-	updatedAt: campaign.updatedAt.toISOString(),
-});
+) => {
+	// Extract organization info from the first organization (assuming single org per campaign for now)
+	const firstOrg =
+		Array.isArray(campaign.organizations) && campaign.organizations.length > 0
+			? campaign.organizations[0]
+			: null;
+
+	return {
+		id: campaign._id.toString(),
+		title: campaign.title,
+		description: campaign.description,
+		startDate: campaign.startDate.toISOString(),
+		endDate: campaign.endDate.toISOString(),
+		status: campaign.status,
+		causes: campaign.causes, // Populated by Mongoose
+		organizationId: firstOrg
+			? (firstOrg._id || firstOrg.id || firstOrg).toString()
+			: "",
+		organizationName: firstOrg
+			? firstOrg.name || "Unknown Organization"
+			: "Unknown Organization",
+		totalTargetAmount: campaign.totalTargetAmount,
+		totalRaisedAmount: campaign.totalRaisedAmount,
+		donorCount: campaign.totalSupporters, // Map totalSupporters to donorCount
+		imageUrl: campaign.imageUrl,
+		acceptedDonationTypes: campaign.acceptedDonationTypes,
+		createdAt: campaign.createdAt.toISOString(),
+		updatedAt: campaign.updatedAt.toISOString(),
+	};
+};
 
 // Get all campaigns with pagination and filters
 export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
@@ -119,7 +132,7 @@ export const getCampaignById = catchAsync(
 		const { campaignId } = req.params;
 
 		const campaign = await Campaign.findById(campaignId)
-			.populate("organizationId", "name email phone address")
+			.populate("organizations", "name email phone address")
 			.populate("causes", "title description targetAmount raisedAmount");
 
 		if (!campaign) {

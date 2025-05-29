@@ -60,15 +60,11 @@ export const setupSocketIO = (io: Server) => {
 			}
 		}
 
-		// Handle ping for connection testing
 		socket.on("ping", (data) => {
 			socket.emit("pong", { ...data, serverTime: Date.now() });
 		});
 
-		// Handle notification acknowledgment
-		socket.on("notification:read", (notificationId: string) => {
-			// You can add additional logic here if needed
-		});
+		socket.on("notification:read", (notificationId: string) => {});
 
 		// Handle test notifications (for development)
 		socket.on("test:notification", (data) => {
@@ -100,15 +96,10 @@ export const setupSocketIO = (io: Server) => {
 		});
 
 		// Handle disconnection
-		socket.on("disconnect", () => {
+		socket.on("disconnect", (reason) => {
 			if (socket.userId) {
 				connectedUsers.delete(socket.userId);
 			}
-		});
-
-		// Handle errors
-		socket.on("error", (error) => {
-			// Socket error handling
 		});
 	});
 };

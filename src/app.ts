@@ -15,6 +15,7 @@ import notificationRoutes from "./routes/notification.routes";
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
+import uploadRoutes from "./routes/upload.routes";
 import { NotificationService } from "./services/notificationService";
 
 // Load environment variables
@@ -36,7 +37,6 @@ app.use(
 		exposedHeaders: ["Content-Disposition"],
 	})
 );
-
 
 app.use("/api/payments", paymentRoutes);
 // Body parsing middleware
@@ -82,6 +82,7 @@ app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/upload", uploadRoutes);
 
 // Health check route
 app.get("/health", (req: Request, res: Response) => {

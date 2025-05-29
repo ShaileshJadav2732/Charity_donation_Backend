@@ -21,6 +21,7 @@ router.get("/active-campaigns", getActiveCampaignCauses);
 router.post("/", authenticate, authorize(["organization"]), createCause);
 router.get(
 	"/organization/:organizationId",
+	authenticate,
 	authorize(["organization"]),
 	getOrganizationCauses
 );

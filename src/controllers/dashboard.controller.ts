@@ -403,18 +403,21 @@ export const getOrganizationDashboardStats = async (
 		// Get feedback stats
 
 		// Get recent activities
-		const recentActivities = await Promise.all([
-			// Recent donations
-			Donation.find({ organization: organizationId })
-				.sort({ createdAt: -1 })
-				.limit(5)
-				.populate("donor", "firstName lastName"),
+		const recentDonations = await Donation.find({
+			organization: organizationId,
+		})
+			.sort({ createdAt: -1 })
+			.limit(10)
+			.populate("donor", "firstName lastName email")
+			.populate("campaign", "title")
+			.lean();
 
-			// Recent campaigns
-			Campaign.find({ organizations: organizationId })
-				.sort({ createdAt: -1 })
-				.limit(5),
-		]);
+		const recentCampaigns = await Campaign.find({
+			organizations: organizationId,
+		})
+			.sort({ createdAt: -1 })
+			.limit(5)
+			.lean();
 
 		// Get monthly donation trends for organization
 		const sixMonthsAgo = new Date();
@@ -576,8 +579,31 @@ export const getOrganizationDashboardStats = async (
 					})),
 				},
 				recentActivities: {
-					donations: recentActivities[0],
-					campaigns: recentActivities[1],
+					donations: recentDonations.map((donation: any) => ({
+						id: donation._id,
+						type: "donation",
+						amount: donation.amount,
+						campaignName:
+							donation.campaign?.title ||
+							donation.description ||
+							"Direct Donation",
+						timestamp: donation.createdAt,
+						donorName: donation.donor
+							? `${donation.donor.firstName || ""} ${donation.donor.lastName || ""}`.trim()
+							: "Anonymous",
+						donorEmail: donation.donor?.email || "N/A",
+						donationType: donation.type,
+						status: donation.status,
+					})),
+					campaigns: recentCampaigns.map((campaign: any) => ({
+						id: campaign._id,
+						type: "campaign",
+						campaignName: campaign.title,
+						timestamp: campaign.createdAt,
+						status: campaign.status,
+						targetAmount: campaign.totalTargetAmount,
+						raisedAmount: campaign.totalRaisedAmount,
+					})),
 				},
 			},
 		});

@@ -2,6 +2,7 @@ import express from "express";
 import {
 	createCampaign,
 	getCampaigns,
+	getCampaignById,
 	getCampaignDetails,
 	updateCampaign,
 	deleteCampaign,
@@ -13,7 +14,8 @@ const router = express.Router();
 
 // Public routes
 router.get("/", getCampaigns);
-router.get("/:campaignId", getCampaignDetails);
+router.get("/:campaignId", getCampaignById);
+router.get("/:campaignId/details", getCampaignDetails);
 
 // Protected routes (require authentication)
 router.use(authenticate);

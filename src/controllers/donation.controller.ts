@@ -646,16 +646,90 @@ export const findOrganizationPendingDonations = async (
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 10;
 
-		// Create query based on inputs
-		const donations = await Donation.find({
-			organization: organizationId,
-			status: status,
-		})
-			.populate("donor", "email phone")
-			.populate("cause", "title")
-			.sort({ createdAt: -1 })
-			.skip((page - 1) * limit)
-			.limit(limit);
+		// Use aggregation pipeline to properly join donor information
+		const donationsAggregation = await Donation.aggregate([
+			{
+				$match: {
+					organization: new mongoose.Types.ObjectId(organizationId),
+					status: status,
+				},
+			},
+			{
+				$lookup: {
+					from: "users",
+					localField: "donor",
+					foreignField: "_id",
+					as: "donorUser",
+				},
+			},
+			{
+				$lookup: {
+					from: "donorprofiles",
+					localField: "donor",
+					foreignField: "userId",
+					as: "donorProfile",
+				},
+			},
+			{
+				$lookup: {
+					from: "causes",
+					localField: "cause",
+					foreignField: "_id",
+					as: "causeInfo",
+				},
+			},
+			{
+				$unwind: {
+					path: "$donorUser",
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{
+				$unwind: {
+					path: "$donorProfile",
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{
+				$unwind: {
+					path: "$causeInfo",
+					preserveNullAndEmptyArrays: true,
+				},
+			},
+			{
+				$addFields: {
+					"donor.name": {
+						$cond: {
+							if: {
+								$and: ["$donorProfile.firstName", "$donorProfile.lastName"],
+							},
+							then: {
+								$concat: [
+									"$donorProfile.firstName",
+									" ",
+									"$donorProfile.lastName",
+								],
+							},
+							else: "$donorUser.email",
+						},
+					},
+					"donor.email": "$donorUser.email",
+					"donor.phone": "$donorProfile.phoneNumber",
+					"donor._id": "$donorUser._id",
+					"cause.title": "$causeInfo.title",
+					"cause._id": "$causeInfo._id",
+				},
+			},
+			{
+				$sort: { createdAt: -1 },
+			},
+			{
+				$skip: (page - 1) * limit,
+			},
+			{
+				$limit: limit,
+			},
+		]);
 
 		// Get total count for pagination
 		const total = await Donation.countDocuments({
@@ -666,7 +740,7 @@ export const findOrganizationPendingDonations = async (
 		// Return the results
 		res.status(200).json({
 			success: true,
-			data: donations,
+			data: donationsAggregation,
 			pagination: {
 				total,
 				page,
