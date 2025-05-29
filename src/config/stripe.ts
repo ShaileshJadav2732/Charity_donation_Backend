@@ -1,7 +1,12 @@
 import Stripe from "stripe";
 
+// Validate required environment variables
 if (!process.env.STRIPE_SECRET_KEY) {
 	throw new Error("STRIPE_SECRET_KEY is required");
+}
+
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+	console.warn("STRIPE_WEBHOOK_SECRET is not configured - webhooks will not work");
 }
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -9,7 +14,7 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export const STRIPE_CONFIG = {
-	currency: "usd",
+	currency: "inr", // Changed from USD to INR to match frontend display
 	automatic_payment_methods: {
 		enabled: true,
 	},

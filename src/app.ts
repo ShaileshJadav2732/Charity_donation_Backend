@@ -38,8 +38,7 @@ app.use(
 	})
 );
 
-app.use("/api/payments", paymentRoutes);
-// Body parsing middleware
+// Body parsing middleware (MUST be before routes that need JSON parsing)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
@@ -82,6 +81,7 @@ app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
+app.use("/api/payments", paymentRoutes);
 app.use("/api/upload", uploadRoutes);
 
 // Health check route

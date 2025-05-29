@@ -53,10 +53,10 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Validate amount (minimum $1)
+		// Validate amount (minimum ₹1)
 		if (amount < 1) {
 			return res.status(400).json({
-				message: "Amount must be at least $1",
+				message: "Amount must be at least ₹1",
 			});
 		}
 
@@ -74,7 +74,7 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 
 		// Create payment intent with Stripe
 		const paymentIntent = await stripe.paymentIntents.create({
-			amount: Math.round(amount * 100), // Convert to cents
+			amount: Math.round(amount * 100), // Convert to paise (smallest unit of INR)
 			currency: STRIPE_CONFIG.currency,
 			automatic_payment_methods: STRIPE_CONFIG.automatic_payment_methods,
 			metadata: {
@@ -148,12 +148,13 @@ export const confirmPayment = async (req: Request, res: Response) => {
 			campaign: donationData.campaign || undefined,
 			cause: donationData.cause,
 			type: DonationType.MONEY,
-			status: DonationStatus.CONFIRMED, // Payment already succeeded
-			amount: paymentIntent.amount / 100, // Convert from cents
+			status: DonationStatus.PENDING, // Start with PENDING status as per workflow
+			amount: paymentIntent.amount / 100, // Convert from paise to rupees
 			description: donationData.description,
 			contactPhone: donationData.contactPhone,
 			contactEmail: donationData.contactEmail,
 			paymentIntentId: paymentIntentId,
+			paymentStatus: paymentIntent.status, // Store Stripe payment status
 			isPickup: false, // Monetary donations don't require pickup
 		});
 
@@ -180,7 +181,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 				await sendEmail(
 					organizationData.email,
 					donation._id.toString(),
-					DonationStatus.CONFIRMED,
+					DonationStatus.PENDING, // Changed to PENDING status
 					donation.amount,
 					undefined,
 					undefined
@@ -213,7 +214,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 		return res.status(400).send("Webhook secret not configured");
 	}
 
-	let event;
+	let event: any;
 
 	try {
 		event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
@@ -226,14 +227,39 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	switch (event.type) {
 		case "payment_intent.succeeded":
 			const paymentIntent = event.data.object;
+			console.log("Payment succeeded:", paymentIntent.id);
 
-			// Additional processing if needed
+			// Update donation status to APPROVED when payment succeeds
+			try {
+				await Donation.findOneAndUpdate(
+					{ paymentIntentId: paymentIntent.id },
+					{
+						status: DonationStatus.APPROVED,
+						paymentStatus: paymentIntent.status
+					}
+				);
+			} catch (updateError) {
+				console.error("Failed to update donation status:", updateError);
+			}
 			break;
+
 		case "payment_intent.payment_failed":
 			const failedPayment = event.data.object;
+			console.log("Payment failed:", failedPayment.id);
 
-			// Handle failed payment
+			// Update donation status when payment fails
+			try {
+				await Donation.findOneAndUpdate(
+					{ paymentIntentId: failedPayment.id },
+					{ paymentStatus: failedPayment.status }
+				);
+			} catch (updateError) {
+				console.error("Failed to update failed payment status:", updateError);
+			}
 			break;
+
+		default:
+			console.log(`Unhandled event type ${event.type}`);
 	}
 
 	res.json({ received: true });

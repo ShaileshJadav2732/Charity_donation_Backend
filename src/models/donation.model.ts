@@ -90,9 +90,7 @@ const DonationSchema: Schema = new Schema(
 		type: {
 			type: String,
 			enum: Object.values(DonationType),
-			required: function (this: { type: DonationType }) {
-				return this.type === DonationType.MONEY;
-			},
+			required: true,
 		},
 		status: {
 			type: String,
