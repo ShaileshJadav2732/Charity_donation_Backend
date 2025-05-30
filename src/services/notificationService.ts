@@ -1,6 +1,12 @@
 import { Server } from "socket.io";
-import Notification, { NotificationType, INotification } from "../models/notification.model";
-import { emitNotificationToUser, emitNotificationToRole } from "../socket/socketHandler";
+import Notification, {
+	NotificationType,
+	INotification,
+} from "../models/notification.model";
+import {
+	emitNotificationToUser,
+	emitNotificationToRole,
+} from "../socket/socketHandler";
 import mongoose from "mongoose";
 
 interface CreateNotificationData {
@@ -19,14 +25,16 @@ export class NotificationService {
 	}
 
 	// Create and emit a notification to a specific user
-	async createAndEmitNotification(notificationData: CreateNotificationData): Promise<INotification> {
+	async createAndEmitNotification(
+		notificationData: CreateNotificationData
+	): Promise<INotification> {
 		try {
 			// Create notification in database
 			const notification = new Notification(notificationData);
 			await notification.save();
 
 			// Populate recipient for socket emission
-			await notification.populate('recipient', 'name email role');
+			await notification.populate("recipient", "name email role");
 
 			// Emit real-time notification
 			emitNotificationToUser(this.io, notificationData.recipient, {
@@ -37,13 +45,11 @@ export class NotificationService {
 				data: notification.data,
 				isRead: notification.isRead,
 				createdAt: notification.createdAt,
-				recipient: notification.recipient
+				recipient: notification.recipient,
 			});
 
-			console.log(`Real-time notification created and sent to user ${notificationData.recipient}`);
 			return notification;
 		} catch (error) {
-			console.error("Error creating and emitting notification:", error);
 			throw error;
 		}
 	}
@@ -67,8 +73,8 @@ export class NotificationService {
 				donationId: donationData.donationId,
 				donorName: donationData.donorName,
 				amount: donationData.amount,
-				cause: donationData.cause
-			}
+				cause: donationData.cause,
+			},
 		});
 	}
 
@@ -83,12 +89,13 @@ export class NotificationService {
 		}
 	): Promise<INotification> {
 		const statusMessages = {
-			'approved': 'Your donation has been approved',
-			'received': 'Your donation has been received',
-			'confirmed': 'Your donation has been confirmed and processed'
+			approved: "Your donation has been approved",
+			received: "Your donation has been received",
+			confirmed: "Your donation has been confirmed and processed",
 		};
 
-		const message = statusMessages[statusData.status as keyof typeof statusMessages] || 
+		const message =
+			statusMessages[statusData.status as keyof typeof statusMessages] ||
 			`Your donation status has been updated to ${statusData.status}`;
 
 		return this.createAndEmitNotification({
@@ -100,8 +107,8 @@ export class NotificationService {
 				donationId: statusData.donationId,
 				status: statusData.status,
 				organizationName: statusData.organizationName,
-				cause: statusData.cause
-			}
+				cause: statusData.cause,
+			},
 		});
 	}
 
@@ -112,16 +119,18 @@ export class NotificationService {
 			campaignId: string;
 			campaignName: string;
 			organizationName: string;
-			action: 'created' | 'updated';
+			action: "created" | "updated";
 		}
 	): Promise<INotification> {
-		const type = campaignData.action === 'created' ? 
-			NotificationType.CAMPAIGN_CREATED : 
-			NotificationType.CAMPAIGN_UPDATED;
+		const type =
+			campaignData.action === "created"
+				? NotificationType.CAMPAIGN_CREATED
+				: NotificationType.CAMPAIGN_UPDATED;
 
-		const title = campaignData.action === 'created' ? 
-			"New Campaign Created" : 
-			"Campaign Updated";
+		const title =
+			campaignData.action === "created"
+				? "New Campaign Created"
+				: "Campaign Updated";
 
 		const message = `${campaignData.organizationName} has ${campaignData.action} the campaign "${campaignData.campaignName}"`;
 
@@ -134,8 +143,8 @@ export class NotificationService {
 				campaignId: campaignData.campaignId,
 				campaignName: campaignData.campaignName,
 				organizationName: campaignData.organizationName,
-				action: campaignData.action
-			}
+				action: campaignData.action,
+			},
 		});
 	}
 
@@ -145,21 +154,24 @@ export class NotificationService {
 		feedbackData: {
 			feedbackId: string;
 			senderName: string;
-			type: 'received' | 'response';
+			type: "received" | "response";
 			subject?: string;
 		}
 	): Promise<INotification> {
-		const type = feedbackData.type === 'received' ? 
-			NotificationType.FEEDBACK_RECEIVED : 
-			NotificationType.FEEDBACK_RESPONSE;
+		const type =
+			feedbackData.type === "received"
+				? NotificationType.FEEDBACK_RECEIVED
+				: NotificationType.FEEDBACK_RESPONSE;
 
-		const title = feedbackData.type === 'received' ? 
-			"New Feedback Received" : 
-			"Feedback Response";
+		const title =
+			feedbackData.type === "received"
+				? "New Feedback Received"
+				: "Feedback Response";
 
-		const message = feedbackData.type === 'received' ? 
-			`You received new feedback from ${feedbackData.senderName}` :
-			`${feedbackData.senderName} responded to your feedback`;
+		const message =
+			feedbackData.type === "received"
+				? `You received new feedback from ${feedbackData.senderName}`
+				: `${feedbackData.senderName} responded to your feedback`;
 
 		return this.createAndEmitNotification({
 			recipient: recipientId,
@@ -169,8 +181,8 @@ export class NotificationService {
 			data: {
 				feedbackId: feedbackData.feedbackId,
 				senderName: feedbackData.senderName,
-				subject: feedbackData.subject
-			}
+				subject: feedbackData.subject,
+			},
 		});
 	}
 
@@ -188,14 +200,14 @@ export class NotificationService {
 			type: NotificationType.SYSTEM_NOTIFICATION,
 			title: systemData.title,
 			message: systemData.message,
-			data: systemData.data
+			data: systemData.data,
 		});
 	}
 
 	// Broadcast notification to multiple users
 	async broadcastNotification(
 		recipientIds: string[],
-		notificationData: Omit<CreateNotificationData, 'recipient'>
+		notificationData: Omit<CreateNotificationData, "recipient">
 	): Promise<INotification[]> {
 		const notifications: INotification[] = [];
 
@@ -203,19 +215,20 @@ export class NotificationService {
 			try {
 				const notification = await this.createAndEmitNotification({
 					...notificationData,
-					recipient: recipientId
+					recipient: recipientId,
 				});
 				notifications.push(notification);
-			} catch (error) {
-				console.error(`Failed to send notification to user ${recipientId}:`, error);
-			}
+			} 
 		}
 
 		return notifications;
 	}
 
 	// Mark notification as read and emit update
-	async markAsRead(notificationId: string, userId: string): Promise<INotification | null> {
+	async markAsRead(
+		notificationId: string,
+		userId: string
+	): Promise<INotification | null> {
 		try {
 			const notification = await Notification.findOneAndUpdate(
 				{ _id: notificationId, recipient: userId },
@@ -226,14 +239,13 @@ export class NotificationService {
 			if (notification) {
 				// Emit read status update
 				emitNotificationToUser(this.io, userId, {
-					type: 'notification:read',
-					notificationId: notificationId
+					type: "notification:read",
+					notificationId: notificationId,
 				});
 			}
 
 			return notification;
 		} catch (error) {
-			console.error("Error marking notification as read:", error);
 			throw error;
 		}
 	}

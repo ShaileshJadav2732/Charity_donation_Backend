@@ -28,9 +28,21 @@ const app: Application = express();
 connectDB();
 
 // Middleware
+const allowedOrigins = [
+	"http://localhost:3000",
+	"http://localhost:3001",
+	"https://a160-115-242-213-210.ngrok-free.app/", // optional, for ngrok testing
+];
+
 app.use(
 	cors({
-		origin: "http://localhost:3000",
+		origin: function (origin, callback) {
+			// allow requests with no origin (like mobile apps, curl, postman)
+			if (!origin || allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+			return callback(new Error("Not allowed by CORS"));
+		},
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
@@ -75,7 +87,6 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
 app.use("/api/campaigns", campaignRoutes);
-console.log("Registering feedback routes at /api/feedback");
 
 app.use("/api/notifications", notificationRoutes);
 
@@ -94,8 +105,8 @@ app.use((err: any, req: Request, res: Response, next: Function) => {
 	console.error("Error:", err);
 });
 // 404 route
-app.use("*", (req: Request, res: Response) => {
-	res.status(404).json({ message: "Route not found" });
-});
+// app.use, (req: Request, res: Response) => {
+// 	res.status(404).json({ message: "Route not found" });
+// });
 
 export default app;

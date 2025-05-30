@@ -85,7 +85,6 @@ export const completeDonorProfile = async (req: AuthRequest, res: Response) => {
 			profile: donorProfile,
 		});
 	} catch (error) {
-		console.error("Complete donor profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -173,7 +172,6 @@ export const completeOrganizationProfile = async (
 			profile: orgProfile,
 		});
 	} catch (error) {
-		console.error("Complete organization profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -193,7 +191,6 @@ export const getDonorProfile = async (req: AuthRequest, res: Response) => {
 
 		return res.status(200).json({ profile: donorProfile });
 	} catch (error) {
-		console.error("Get donor profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -220,7 +217,6 @@ export const getOrganizationProfile = async (
 
 		return res.status(200).json({ profile: orgProfile });
 	} catch (error) {
-		console.error("Get organization profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -268,7 +264,6 @@ export const uploadDonorProfileImage = async (
 			profileImage: imagePath,
 		});
 	} catch (error) {
-		console.error("Upload donor profile image error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };

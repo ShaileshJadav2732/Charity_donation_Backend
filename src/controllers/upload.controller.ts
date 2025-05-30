@@ -35,7 +35,6 @@ export const uploadCauseImage = catchAsync(
 				},
 			});
 		} catch (error) {
-			console.error("Cloudinary upload error:", error);
 			throw new AppError("Failed to upload image", 500);
 		}
 	}
@@ -62,7 +61,6 @@ export const deleteImage = catchAsync(
 				message: "Image deleted successfully",
 			});
 		} catch (error) {
-			console.error("Cloudinary delete error:", error);
 			throw new AppError("Failed to delete image", 500);
 		}
 	}
@@ -91,7 +89,6 @@ export const uploadCampaignImage = catchAsync(
 				},
 			});
 		} catch (error) {
-			console.error("Cloudinary upload error:", error);
 			throw new AppError("Failed to upload campaign image", 500);
 		}
 	}
@@ -120,7 +117,6 @@ export const uploadOrganizationLogo = catchAsync(
 				},
 			});
 		} catch (error) {
-			console.error("Cloudinary upload error:", error);
 			throw new AppError("Failed to upload organization logo", 500);
 		}
 	}

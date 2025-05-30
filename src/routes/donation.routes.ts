@@ -25,8 +25,6 @@ router.use(authenticate);
 
 // Test authentication endpoint
 router.get("/test-auth", (req: express.Request, res: express.Response) => {
-	console.log("Test auth endpoint called");
-	console.log("req.user:", req.user);
 	res.json({
 		success: true,
 		message: "Authentication working",

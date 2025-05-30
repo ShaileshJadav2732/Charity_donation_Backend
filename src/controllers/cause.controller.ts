@@ -99,7 +99,6 @@ export const getCauseById = catchAsync(
 				cause: formattedCause,
 			});
 		} catch (error) {
-			console.error(`[getCauseById] Error finding cause:`, error);
 			throw error;
 		}
 	}
@@ -460,7 +459,6 @@ export const getActiveCampaignCauses = catchAsync(
 				limit,
 			});
 		} catch (error) {
-			console.error("Error fetching active campaign causes:", error);
 			throw new AppError("Error fetching active campaign causes", 500);
 		}
 	}

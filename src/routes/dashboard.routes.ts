@@ -7,7 +7,11 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 
 const router = express.Router();
+router.get(
+	"/organization",
 
+	getOrganizationDashboardStats
+);
 // All routes require authentication
 router.use(authenticate);
 
@@ -19,10 +23,5 @@ router.get(
 );
 
 // Get organization dashboard stats
-router.get(
-	"/organization",
-	authorize(["organization"]),
-	getOrganizationDashboardStats
-);
 
 export default router;

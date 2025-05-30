@@ -47,7 +47,6 @@ export const getNotifications = async (
 
 		res.status(200).json({ success: true, notifications });
 	} catch (error: any) {
-		console.error("Error fetching notifications:", error);
 		res.status(500).json({
 			success: false,
 			message: "Error fetching notifications",
@@ -86,7 +85,6 @@ export const markNotificationAsRead = async (
 		await notification.save();
 		res.status(200).json({ success: true, notification });
 	} catch (error: any) {
-		console.error("Error marking notification as read:", error);
 		res.status(500).json({
 			success: false,
 			message: "Error marking notification as read",
@@ -124,7 +122,6 @@ export const dismissNotification = async (
 		await notification.deleteOne();
 		res.status(200).json({ success: true, notification });
 	} catch (error: any) {
-		console.error("Error dismissing notification:", error);
 		res.status(500).json({
 			success: false,
 			message: "Error dismissing notification",

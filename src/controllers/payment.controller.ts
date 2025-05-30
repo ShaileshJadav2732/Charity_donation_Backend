@@ -53,10 +53,10 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Validate amount (minimum ₹1)
-		if (amount < 1) {
+		// Validate amount (minimum ₹50 for Stripe INR requirements)
+		if (amount < 50) {
 			return res.status(400).json({
-				message: "Amount must be at least ₹1",
+				message: "Amount must be at least ₹50",
 			});
 		}
 
@@ -70,6 +70,28 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 
 		if (!orgDoc) {
 			return res.status(404).json({ message: "Organization not found" });
+		}
+
+		// Check for existing pending payment intent for the same user and cause
+		const existingPaymentIntents = await stripe.paymentIntents.list({
+			limit: 50, // Increase limit to check more intents
+		});
+
+		const duplicateIntent = existingPaymentIntents.data.find(
+			(intent) =>
+				intent.metadata.donorId === req.user.id.toString() &&
+				intent.metadata.causeId === cause &&
+				intent.amount === Math.round(amount * 100) &&
+				(intent.status === "requires_payment_method" ||
+					intent.status === "requires_confirmation" ||
+					intent.status === "requires_action")
+		);
+
+		if (duplicateIntent) {
+			return res.status(200).json({
+				clientSecret: duplicateIntent.client_secret,
+				paymentIntentId: duplicateIntent.id,
+			});
 		}
 
 		// Create payment intent with Stripe
@@ -93,7 +115,6 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
 			paymentIntentId: paymentIntent.id,
 		});
 	} catch (error) {
-		console.error("Error creating payment intent:", error);
 		res.status(500).json({
 			message: "Failed to create payment intent",
 			error: error instanceof Error ? error.message : "Unknown error",
@@ -116,9 +137,13 @@ export const confirmPayment = async (req: Request, res: Response) => {
 		// Retrieve payment intent from Stripe
 		const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-		if (paymentIntent.status !== "succeeded") {
+		// Accept both succeeded and processing statuses
+		if (
+			paymentIntent.status !== "succeeded" &&
+			paymentIntent.status !== "processing"
+		) {
 			return res.status(400).json({
-				message: "Payment has not been completed successfully",
+				message: `Payment status is ${paymentIntent.status}. Expected 'succeeded' or 'processing'.`,
 				status: paymentIntent.status,
 			});
 		}
@@ -136,8 +161,17 @@ export const confirmPayment = async (req: Request, res: Response) => {
 		});
 
 		if (existingDonation) {
-			return res.status(400).json({
-				message: "Donation already exists for this payment",
+			// Return the existing donation instead of error
+			const populatedDonation = await Donation.findById(existingDonation._id)
+				.populate("donor", "name email")
+				.populate("organization", "name email")
+				.populate("cause", "title")
+				.populate("campaign", "title");
+
+			return res.status(200).json({
+				success: true,
+				data: populatedDonation,
+				message: "Donation already processed for this payment",
 			});
 		}
 
@@ -186,9 +220,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 					undefined,
 					undefined
 				);
-			} catch (emailError) {
-				console.error("Failed to send email to organization:", emailError);
-			}
+			} catch (emailError) {}
 		}
 
 		res.status(201).json({
@@ -197,7 +229,6 @@ export const confirmPayment = async (req: Request, res: Response) => {
 			message: "Payment confirmed and donation created successfully",
 		});
 	} catch (error) {
-		console.error("Error confirming payment:", error);
 		res.status(500).json({
 			message: "Failed to confirm payment",
 			error: error instanceof Error ? error.message : "Unknown error",
@@ -210,7 +241,6 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 	if (!endpointSecret) {
-		console.error("Stripe webhook secret not configured");
 		return res.status(400).send("Webhook secret not configured");
 	}
 
@@ -219,7 +249,6 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	try {
 		event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
 	} catch (err) {
-		console.error("Webhook signature verification failed:", err);
 		return res.status(400).send(`Webhook Error: ${err}`);
 	}
 
@@ -227,39 +256,62 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	switch (event.type) {
 		case "payment_intent.succeeded":
 			const paymentIntent = event.data.object;
-			console.log("Payment succeeded:", paymentIntent.id);
 
-			// Update donation status to APPROVED when payment succeeds
 			try {
-				await Donation.findOneAndUpdate(
+				// First, try to update existing donation
+				const existingDonation = await Donation.findOneAndUpdate(
 					{ paymentIntentId: paymentIntent.id },
 					{
 						status: DonationStatus.APPROVED,
-						paymentStatus: paymentIntent.status
-					}
+						paymentStatus: paymentIntent.status,
+					},
+					{ new: true }
 				);
-			} catch (updateError) {
-				console.error("Failed to update donation status:", updateError);
-			}
+
+				if (existingDonation) {
+				} else {
+					const donation = new Donation({
+						donor: paymentIntent.metadata.donorId,
+						organization: paymentIntent.metadata.organizationId,
+						campaign: paymentIntent.metadata.campaignId || undefined,
+						cause: paymentIntent.metadata.causeId,
+						type: DonationType.MONEY,
+						status: DonationStatus.APPROVED, // Set to APPROVED since payment succeeded
+						amount: paymentIntent.amount / 100, // Convert from paise to rupees
+						description: paymentIntent.metadata.description,
+						contactPhone: paymentIntent.metadata.contactPhone,
+						contactEmail: paymentIntent.metadata.contactEmail,
+						paymentIntentId: paymentIntent.id,
+						paymentStatus: paymentIntent.status,
+						isPickup: false,
+					});
+
+					await donation.save();
+
+					// Update cause raised amount
+					if (paymentIntent.metadata.causeId) {
+						const cause = await Cause.findById(paymentIntent.metadata.causeId);
+						if (cause) {
+							cause.raisedAmount += donation.amount!;
+							await cause.save();
+						}
+					}
+				}
+			} catch (updateError) {}
 			break;
 
 		case "payment_intent.payment_failed":
 			const failedPayment = event.data.object;
-			console.log("Payment failed:", failedPayment.id);
 
 			// Update donation status when payment fails
 			try {
-				await Donation.findOneAndUpdate(
+				const updatedDonation = await Donation.findOneAndUpdate(
 					{ paymentIntentId: failedPayment.id },
-					{ paymentStatus: failedPayment.status }
+					{ paymentStatus: failedPayment.status },
+					{ new: true }
 				);
-			} catch (updateError) {
-				console.error("Failed to update failed payment status:", updateError);
-			}
+			} catch (updateError) {}
 			break;
-
-		default:
-			console.log(`Unhandled event type ${event.type}`);
 	}
 
 	res.json({ received: true });

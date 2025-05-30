@@ -184,7 +184,6 @@ export const getCampaignDetails = catchAsync(
 				},
 			});
 		} catch (err) {
-			console.error("Error getting campaign details:", err);
 			throw err;
 		}
 	}
@@ -449,7 +448,7 @@ export const deleteCampaign = catchAsync(
 			});
 		} catch (error) {
 			// This catch block will be handled by the catchAsync wrapper
-			console.error(`Error deleting campaign:`, error);
+
 			throw error;
 		}
 	}

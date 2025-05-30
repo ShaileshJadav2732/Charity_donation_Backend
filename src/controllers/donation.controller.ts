@@ -307,8 +307,9 @@ export const getItemDonationTypeAnalytics = async (
 			});
 		}
 
-		// Get user ID if authenticated
+		// Get user ID and role if authenticated
 		const userId = req.user?._id;
+		const userRole = req.user?.role;
 
 		// Create match condition for confirmed/received donations of the specified type
 		const matchCondition: any = {
@@ -316,9 +317,16 @@ export const getItemDonationTypeAnalytics = async (
 			type: type,
 		};
 
-		// If user is authenticated, filter by their donations
+		// Filter based on user role
 		if (userId) {
-			matchCondition.donor = userId;
+			if (userRole === "donor") {
+				// For donors, show only their donations
+				matchCondition.donor = userId;
+			} else if (userRole === "organization") {
+				// For organizations, show donations received by their organization
+				matchCondition.organization = userId;
+			}
+			// For admin or other roles, show all donations (no additional filter)
 		}
 
 		// Get detailed donation information
@@ -474,8 +482,9 @@ export const getItemDonationTypeAnalytics = async (
 
 export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 	try {
-		// Get user ID if authenticated
+		// Get user ID and role if authenticated
 		const userId = req.user?._id;
+		const userRole = req.user?.role;
 
 		// Create base match condition for confirmed/received item donations
 		const matchCondition: any = {
@@ -483,9 +492,16 @@ export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 			type: { $ne: DonationType.MONEY },
 		};
 
-		// If user is authenticated, filter by their donations
+		// Filter based on user role
 		if (userId) {
-			matchCondition.donor = userId;
+			if (userRole === "donor") {
+				// For donors, show only their donations
+				matchCondition.donor = userId;
+			} else if (userRole === "organization") {
+				// For organizations, show donations received by their organization
+				matchCondition.organization = userId;
+			}
+			// For admin or other roles, show all donations (no additional filter)
 		}
 
 		// Get item donation statistics by type
@@ -617,7 +633,6 @@ export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 			data: response,
 		});
 	} catch (error) {
-		console.error("Failed to fetch item donation analytics:", error);
 		res.status(500).json({
 			success: false,
 			message: "Something went wrong",
@@ -748,7 +763,6 @@ export const findOrganizationPendingDonations = async (
 			},
 		});
 	} catch (error) {
-		console.error("Error finding organization donations:", error);
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch organization donations",
@@ -865,14 +879,9 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 				);
 				emailStatus = "Email sent successfully";
 			} catch (emailError) {
-				console.error(
-					`Failed to send email for donation ${donationId}:`,
-					emailError
-				);
 				emailStatus = "Failed to send email";
 			}
 		} else {
-			console.warn(`No email provided for donor of donation ${donationId}`);
 			emailStatus = "No donor email provided";
 		}
 
@@ -892,14 +901,9 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 
 				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
-				console.error(
-					`Failed to create real-time notification for donation ${donationId}:`,
-					notificationError
-				);
 				notificationStatus = "Failed to create real-time notification";
 			}
 		} else {
-			console.warn(`No donor ID provided for donation ${donationId}`);
 			notificationStatus = "No donor ID provided";
 		}
 
@@ -912,7 +916,6 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			notificationStatus,
 		});
 	} catch (error: any) {
-		console.error("Error updating donation status:", error);
 		res.status(500).json({
 			success: false,
 			message: "Error updating donation status",
@@ -926,7 +929,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 	try {
 		// Check if user is authenticated
 		if (!req.user?._id) {
-			console.error("User not authenticated");
 			return res.status(401).json({
 				success: false,
 				message: "User not authenticated",
@@ -938,7 +940,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 
 		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
-			console.error("Invalid donation ID:", donationId);
 			return res.status(400).json({
 				success: false,
 				message: "Valid donation ID is required",
@@ -947,7 +948,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 
 		// Check if a photo was uploaded
 		if (!req.file) {
-			console.error("No file was uploaded in the request");
 			return res.status(400).json({
 				success: false,
 				message: "Photo is required to mark donation as received",
@@ -1037,14 +1037,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 				);
 				emailStatus = "Email sent successfully";
 			} catch (emailError) {
-				console.error(
-					`Failed to send email for donation ${donationId}:`,
-					emailError
-				);
 				emailStatus = "Failed to send email";
 			}
 		} else {
-			console.warn(`No email provided for donor of donation ${donationId}`);
 			emailStatus = "No donor email provided";
 		}
 
@@ -1065,14 +1060,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 
 				notificationStatus = "Real-time notification created successfully";
 			} catch (notificationError) {
-				console.error(
-					`Failed to create real-time notification for donation ${donationId}:`,
-					notificationError
-				);
 				notificationStatus = "Failed to create real-time notification";
 			}
 		} else {
-			console.warn(`No donor ID provided for donation ${donationId}`);
 			notificationStatus = "No donor ID provided";
 		}
 
@@ -1087,11 +1077,6 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		});
 	} catch (error: any) {
 		console.error("Error marking donation as received:", error);
-
-		// Log detailed error information
-		console.error("Error stack:", error?.stack);
-		console.error("Error type:", typeof error);
-		console.error("Error properties:", Object.keys(error || {}));
 
 		// Determine the appropriate status code
 		const statusCode = error?.status || error?.statusCode || 500;

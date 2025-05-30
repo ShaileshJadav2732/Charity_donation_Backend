@@ -26,10 +26,5 @@ export const sendDonationStatusNotification = async (
 
 	message += `\n\nThank you for your contribution!\nBest regards,\nThe Charity Donation Team`;
 
-	try {
-		await sendEmail(email, subject, message);
-	} catch (error) {
-		console.error("Error sending donation status notification:", error);
-		// Don't throw the error as this is a non-critical operation
-	}
+	await sendEmail(email, subject, message);
 };

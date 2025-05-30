@@ -128,7 +128,6 @@ export const sendEmail = async (
 			html,
 		});
 
-		// console.log(`Email sent to ${to} for donation ${donationId}:`, response);
 		return response;
 	} catch (error) {
 		console.error(
