@@ -18,7 +18,7 @@ import paymentRoutes from "./routes/payment.routes";
 import uploadRoutes from "./routes/upload.routes";
 import { NotificationService } from "./services/notificationService";
 import { handleStripeWebhook } from "./controllers/payment.controller";
-
+import { authenticate } from "./middleware/auth.middleware";
 // Load environment variables
 dotenv.config();
 

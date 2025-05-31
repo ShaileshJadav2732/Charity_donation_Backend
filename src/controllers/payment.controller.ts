@@ -8,7 +8,7 @@ import Donation, {
 import Organization from "../models/organization.model";
 import { sendEmail } from "../utils/email";
 import Stripe from "stripe";
-
+import { IUser } from "../types";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 	apiVersion: "2023-10-16",
 });
@@ -182,7 +182,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 
 		// Create donation record
 		const donation = new Donation({
-			donor: req.user.id,
+			donor: req.user._id,
 			organization: donationData.organization,
 			campaign: donationData.campaign || undefined,
 			cause: donationData.cause,
@@ -237,7 +237,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
 					undefined,
 					undefined
 				);
-			} catch (emailError) {}
+			} catch (emailError) { }
 		}
 
 		res.status(201).json({
@@ -399,7 +399,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 		event = stripe.webhooks.constructEvent(
 			req.body,
 			sig,
-			process.env.STRIPE_WEBHOOK_SECRET!
+			process.env.STRIPE_WEBHOOK_SECRET
 		);
 		console.log(req.body);
 	} catch (err) {
@@ -410,10 +410,11 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 	if (event.type === "checkout.session.completed") {
 		const session = event.data.object as Stripe.Checkout.Session;
 		console.log("data===========", session.metadata);
-		const donorId = session.metadata?.donorId;
+
 		const organizationId = session.metadata?.organizationId;
 		const causeId = session.metadata?.causeId;
 		const campaignId = session.metadata?.campaignId;
+		const donorId = session.metadata?.donorId;
 		const contactEmail =
 			session.customer_details?.email || session.metadata?.contactEmail || "";
 		const contactPhone = session.metadata?.contactPhone || "";
@@ -484,7 +485,11 @@ export const checkoutSession = async (req: Request, res: Response) => {
 		contactPhone,
 		contactEmail,
 	} = req.body;
-	// console.log("checkoutsession dtaa", req.body);
+
+	if (!req.user?.id) {
+		return res.status(401).json({ message: "User not authenticated" });
+	}
+
 	if (!amount || amount <= 0)
 		return res.status(400).json({ error: "Invalid amount" });
 
@@ -508,6 +513,7 @@ export const checkoutSession = async (req: Request, res: Response) => {
 			cancel_url: `http://localhost:3000/cancel`,
 			metadata: {
 				organizationId,
+				donorId: req.user.id.toString(), // Use authenticated user's ID
 				causeId,
 				campaignId: campaignId || "", // optional
 				description: description || "",
