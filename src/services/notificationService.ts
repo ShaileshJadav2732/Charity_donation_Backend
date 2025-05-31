@@ -218,7 +218,9 @@ export class NotificationService {
 					recipient: recipientId,
 				});
 				notifications.push(notification);
-			} 
+			} catch {
+				console.error("NOTIFICATION ERROR");
+			}
 		}
 
 		return notifications;

@@ -35,10 +35,19 @@ export const createDonation = async (req: Request, res: Response) => {
 			notes,
 		} = req.body;
 
+		// Validate that the organization exists and get the organization document
+		const organizationDoc = await Organization.findById(organization);
+		if (!organizationDoc) {
+			return res.status(400).json({
+				success: false,
+				message: "Organization not found",
+			});
+		}
+
 		// Create new donation
 		const donation = new Donation({
 			donor: req.user._id,
-			organization,
+			organization: organizationDoc._id, // Use the Organization document ID
 			campaign,
 			cause,
 			type,
@@ -323,8 +332,14 @@ export const getItemDonationTypeAnalytics = async (
 				// For donors, show only their donations
 				matchCondition.donor = userId;
 			} else if (userRole === "organization") {
-				// For organizations, show donations received by their organization
-				matchCondition.organization = userId;
+				// For organizations, find their organization document and filter by it
+				const organizationDoc = await Organization.findOne({ userId: userId });
+				if (organizationDoc) {
+					matchCondition.organization = organizationDoc._id;
+				} else {
+					// If no organization found, return empty results
+					matchCondition.organization = new mongoose.Types.ObjectId();
+				}
 			}
 			// For admin or other roles, show all donations (no additional filter)
 		}
@@ -498,8 +513,14 @@ export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 				// For donors, show only their donations
 				matchCondition.donor = userId;
 			} else if (userRole === "organization") {
-				// For organizations, show donations received by their organization
-				matchCondition.organization = userId;
+				// For organizations, find their organization document and filter by it
+				const organizationDoc = await Organization.findOne({ userId: userId });
+				if (organizationDoc) {
+					matchCondition.organization = organizationDoc._id;
+				} else {
+					// If no organization found, return empty results
+					matchCondition.organization = new mongoose.Types.ObjectId();
+				}
 			}
 			// For admin or other roles, show all donations (no additional filter)
 		}

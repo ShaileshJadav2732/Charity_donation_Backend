@@ -6,7 +6,8 @@
 		"dev": "npx ts-node --transpile-only src/server.ts",
 		"build": "npm install",
 		"start": "npx ts-node --transpile-only src/server.ts",
-		"seed:donations": "npx ts-node --transpile-only src/scripts/seedDonations.ts"
+		"seed:donations": "npx ts-node --transpile-only src/scripts/seedDonations.ts",
+		"test:donation-flow": "npx ts-node --transpile-only src/scripts/testDonationFlow.ts"
 	},
 	"dependencies": {
 		"axios": "^1.9.0",

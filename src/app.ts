@@ -17,6 +17,7 @@ import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
 import uploadRoutes from "./routes/upload.routes";
 import { NotificationService } from "./services/notificationService";
+import { handleStripeWebhook } from "./controllers/payment.controller";
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +51,11 @@ app.use(
 	})
 );
 
+app.post(
+	"/api/payments/webhook",
+	express.raw({ type: "application/json" }),
+	handleStripeWebhook
+);
 // Body parsing middleware (MUST be before routes that need JSON parsing)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -92,8 +98,8 @@ app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
-app.use("/api/payments", paymentRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Health check route
 app.get("/health", (req: Request, res: Response) => {

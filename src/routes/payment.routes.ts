@@ -1,35 +1,36 @@
-import express from 'express';
+import express from "express";
 import {
-  createPaymentIntent,
-  confirmPayment,
-  handleStripeWebhook,
-} from '../controllers/payment.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { authorize } from '../middleware/role.middleware';
+	createPaymentIntent,
+	confirmPayment,
+	checkoutSession,
+} from "../controllers/payment.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { authorize } from "../middleware/role.middleware";
 
 const router = express.Router();
 
 // Create payment intent for donation
 router.post(
-  '/create-payment-intent',
-  authenticate,
-  authorize(['donor']),
-  createPaymentIntent
+	"/create-payment-intent",
+	authenticate,
+	authorize(["donor"]),
+	createPaymentIntent
 );
 
 // Confirm payment and create donation
 router.post(
-  '/confirm-payment',
-  authenticate,
-  authorize(['donor']),
-  confirmPayment
+	"/confirm-payment",
+	authenticate,
+	authorize(["donor"]),
+	confirmPayment
 );
 
 // Stripe webhook endpoint (no auth required)
-router.post(
-  '/webhook',
-  express.raw({ type: 'application/json' }),
-  handleStripeWebhook
-);
+// router.post(
+// 	"/webhook",
+// 	express.raw({ type: "application/json" }),
+// 	handleStripeWebhook
+// );
 
+router.post("/create-checkout-session", checkoutSession);
 export default router;
