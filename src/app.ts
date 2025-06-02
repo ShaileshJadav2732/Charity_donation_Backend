@@ -58,13 +58,13 @@ app.post(
 	handleStripeWebhook
 );
 
-// Handle message send route with multipart BEFORE JSON parsing
-app.use("/api/messages", messageRoutes);
-
-// Body parsing middleware (MUST be before other routes that need JSON parsing)
-app.use(express.json({ limit: '50mb' }));
+// Body parsing middleware (MUST be before ALL routes that need JSON parsing)
+app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
+
+// Message routes (now after JSON parsing middleware)
+app.use("/api/messages", messageRoutes);
 
 // Middleware to attach notification service to requests
 app.use((req: any, res, next) => {

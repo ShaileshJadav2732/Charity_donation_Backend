@@ -580,10 +580,6 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 						senderName: senderName,
 					},
 				});
-
-				console.log(
-					`📨 Conversation and message notifications sent to participant: ${participantId}`
-				);
 			} catch (notificationError) {
 				console.error(
 					"Failed to send conversation notification:",
@@ -609,11 +605,6 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 // Send a message
 export const sendMessage = async (req: AuthRequest, res: Response) => {
 	try {
-		console.log("📨 Send Message Request:", {
-			body: req.body,
-			contentType: req.headers["content-type"],
-		});
-
 		const userId = req.user?._id;
 		const {
 			conversationId,
@@ -783,7 +774,6 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
 							senderName: enrichedMessage.sender.name,
 						},
 					});
-					console.log(`📨 Notification sent to recipient: ${recipientId}`);
 				} catch (notificationError) {
 					console.error(
 						"Failed to send message notification:",
@@ -791,9 +781,6 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
 					);
 				}
 			} else {
-				console.log(
-					"🚫 Skipping notification - sender and recipient are the same"
-				);
 			}
 		}
 
@@ -1145,9 +1132,6 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 			});
 		}
 
-		console.log("=== RESOLVING PARTICIPANT ID ===");
-		console.log("Input ID:", id);
-
 		let participantUserId: string | null = null;
 		let participantInfo: any = null;
 		let resolvedFrom: string = "";
@@ -1164,10 +1148,9 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 					type: "user",
 				};
 				resolvedFrom = "direct_user";
-				console.log("✅ Resolved as direct User ID");
 			}
 		} catch (error) {
-			console.log("❌ Not a valid User ID");
+			// Not a valid User ID
 		}
 
 		// Strategy 2: Try as Organization ID
@@ -1187,11 +1170,10 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 							organizationName: organization.name,
 						};
 						resolvedFrom = "organization";
-						console.log("✅ Resolved from Organization ID");
 					}
 				}
 			} catch (error) {
-				console.log("❌ Not a valid Organization ID");
+				// Not a valid Organization ID
 			}
 		}
 
@@ -1216,12 +1198,11 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 								causeTitle: cause.title,
 							};
 							resolvedFrom = "cause";
-							console.log("✅ Resolved from Cause ID");
 						}
 					}
 				}
 			} catch (error) {
-				console.log("❌ Not a valid Cause ID");
+				// Not a valid Cause ID
 			}
 		}
 
@@ -1242,11 +1223,10 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 							donorName: `${donorProfile.firstName} ${donorProfile.lastName}`,
 						};
 						resolvedFrom = "donor_profile";
-						console.log("✅ Resolved from DonorProfile ID");
 					}
 				}
 			} catch (error) {
-				console.log("❌ Not a valid DonorProfile ID");
+				// Not a valid DonorProfile ID
 			}
 		}
 
@@ -1275,16 +1255,13 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 								donationType: donation.type,
 							};
 							resolvedFrom = "donation_organization";
-							console.log("✅ Resolved from Donation ID (organization)");
 						}
 					}
 				}
 			} catch (error) {
-				console.log("❌ Not a valid Donation ID");
+				// Not a valid Donation ID
 			}
 		}
-
-		console.log("=================================");
 
 		if (!participantUserId || !participantInfo) {
 			return res.status(404).json({
@@ -1294,9 +1271,6 @@ export const resolveParticipantId = async (req: Request, res: Response) => {
 				inputId: id,
 			});
 		}
-
-		console.log("🎉 Successfully resolved participant:", participantInfo);
-		console.log("Resolved from:", resolvedFrom);
 
 		res.status(200).json({
 			success: true,
@@ -1328,8 +1302,6 @@ export const getUserIdsByRole = async (req: Request, res: Response) => {
 				message: 'Role parameter must be "donor" or "organization"',
 			});
 		}
-
-		console.log(`=== GETTING ${role.toUpperCase()} USER IDs ===`);
 
 		// Get users by role
 		const users = await User.find({ role })
@@ -1377,13 +1349,6 @@ export const getUserIdsByRole = async (req: Request, res: Response) => {
 				});
 			}
 		}
-
-		console.log(`Found ${usersWithProfiles.length} ${role}s`);
-		console.log(
-			"Sample User IDs:",
-			usersWithProfiles.slice(0, 3).map((u) => u.userId)
-		);
-		console.log("=======================================");
 
 		res.status(200).json({
 			success: true,
