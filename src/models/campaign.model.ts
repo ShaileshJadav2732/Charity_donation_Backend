@@ -11,8 +11,8 @@ export interface ICampaign extends Document {
 	causes: mongoose.Types.ObjectId[];
 	organizations: mongoose.Types.ObjectId[];
 	totalTargetAmount: number;
-	totalRaisedAmount: number;
-	totalSupporters: number;
+	// totalRaisedAmount removed - calculated dynamically from donations
+	// totalSupporters removed - calculated dynamically from donations
 	imageUrl: string;
 	tags: string[];
 	acceptedDonationTypes: DonationType[];
@@ -63,16 +63,8 @@ const CampaignSchema: Schema = new Schema(
 			required: [true, "Target amount is required"],
 			min: [0, "Target amount cannot be negative"],
 		},
-		totalRaisedAmount: {
-			type: Number,
-			default: 0,
-			min: [0, "Raised amount cannot be negative"],
-		},
-		totalSupporters: {
-			type: Number,
-			default: 0,
-			min: [0, "Supporters count cannot be negative"],
-		},
+		// totalRaisedAmount field removed - calculated dynamically from donations
+		// totalSupporters field removed - calculated dynamically from donations
 		imageUrl: {
 			type: String,
 			required: [true, "Image URL is required"],

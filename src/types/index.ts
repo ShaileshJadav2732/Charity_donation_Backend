@@ -58,6 +58,7 @@ export interface AuthRequest extends Request {
 	user?: AuthUser;
 }
 
+// Core donation enums - single source of truth for backend
 export enum DonationType {
 	MONEY = "MONEY",
 	CLOTHES = "CLOTHES",
@@ -68,4 +69,21 @@ export enum DonationType {
 	FURNITURE = "FURNITURE",
 	HOUSEHOLD = "HOUSEHOLD",
 	OTHER = "OTHER",
+}
+
+export enum DonationStatus {
+	PENDING = "PENDING",
+	APPROVED = "APPROVED",
+	RECEIVED = "RECEIVED",
+	CONFIRMED = "CONFIRMED",
+	CANCELLED = "CANCELLED",
+}
+
+// Core address interface
+export interface Address {
+	street: string;
+	city: string;
+	state: string;
+	zipCode: string;
+	country: string;
 }

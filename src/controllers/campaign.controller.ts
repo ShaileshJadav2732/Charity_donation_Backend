@@ -12,10 +12,82 @@ interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }
 
+// Helper function to calculate campaign totals with separate money and item tracking
+const calculateCampaignTotals = async (campaignId: string) => {
+	try {
+		// Get all donations for causes in this campaign
+		const campaign = await Campaign.findById(campaignId).populate("causes");
+		if (!campaign) {
+			return {
+				totalRaisedAmount: 0,
+				totalItemDonations: 0,
+				totalSupporters: 0,
+			};
+		}
+
+		const causeIds = campaign.causes.map((cause: any) => cause._id);
+
+		// Calculate money donations
+		const moneyResult = await Donation.aggregate([
+			{
+				$match: {
+					cause: { $in: causeIds },
+					status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+					type: "MONEY",
+				},
+			},
+			{
+				$group: {
+					_id: null,
+					totalRaisedAmount: { $sum: "$amount" },
+				},
+			},
+		]);
+
+		// Calculate item donations
+		const itemResult = await Donation.aggregate([
+			{
+				$match: {
+					cause: { $in: causeIds },
+					status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+					type: { $ne: "MONEY" },
+				},
+			},
+			{
+				$group: {
+					_id: null,
+					totalItemDonations: { $sum: { $ifNull: ["$quantity", 1] } },
+				},
+			},
+		]);
+
+		// Calculate unique supporters (both money and items)
+		const uniqueDonors = await Donation.distinct("donor", {
+			cause: { $in: causeIds },
+			status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+		});
+
+		return {
+			totalRaisedAmount:
+				moneyResult.length > 0 ? moneyResult[0].totalRaisedAmount || 0 : 0,
+			totalItemDonations:
+				itemResult.length > 0 ? itemResult[0].totalItemDonations || 0 : 0,
+			totalSupporters: uniqueDonors.length,
+		};
+	} catch (error) {
+		console.error("Error calculating campaign totals:", error);
+		return { totalRaisedAmount: 0, totalItemDonations: 0, totalSupporters: 0 };
+	}
+};
+
 // Helper function to format campaign response
-const formatCampaignResponse = (
+const formatCampaignResponse = async (
 	campaign: ICampaign & { _id: mongoose.Types.ObjectId }
 ) => {
+	// Calculate real-time totals from donations with separate tracking
+	const { totalRaisedAmount, totalItemDonations, totalSupporters } =
+		await calculateCampaignTotals(campaign._id.toString());
+
 	// Extract organization info from the first organization (assuming single org per campaign for now)
 	const firstOrg =
 		Array.isArray(campaign.organizations) && campaign.organizations.length > 0
@@ -33,12 +105,14 @@ const formatCampaignResponse = (
 		organizationId: firstOrg
 			? (firstOrg._id || firstOrg.id || firstOrg).toString()
 			: "",
-		organizationName: firstOrg
-			? firstOrg.name || "Unknown Organization"
-			: "Unknown Organization",
+		organizationName:
+			firstOrg && typeof firstOrg === "object" && "name" in firstOrg
+				? (firstOrg as any).name || "Unknown Organization"
+				: "Unknown Organization",
 		totalTargetAmount: campaign.totalTargetAmount,
-		totalRaisedAmount: campaign.totalRaisedAmount,
-		donorCount: campaign.totalSupporters, // Map totalSupporters to donorCount
+		totalRaisedAmount: totalRaisedAmount, // Money raised
+		totalItemDonations: totalItemDonations, // Items donated
+		donorCount: totalSupporters, // Total unique donors
 		imageUrl: campaign.imageUrl,
 		acceptedDonationTypes: campaign.acceptedDonationTypes,
 		createdAt: campaign.createdAt.toISOString(),
@@ -108,16 +182,21 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 	const [campaigns, total] = await Promise.all([
 		Campaign.find(query)
 			.populate("organizations", "name email phone")
-			.populate("causes", "title description targetAmount raisedAmount")
+			.populate("causes", "title description targetAmount") // raisedAmount removed - calculated dynamically
 			.sort(sort)
 			.skip(skip)
 			.limit(Number(limit)),
 		Campaign.countDocuments(query),
 	]);
 
+	// Format campaigns with calculated totals
+	const formattedCampaigns = await Promise.all(
+		campaigns.map((campaign) => formatCampaignResponse(campaign))
+	);
+
 	res.status(200).json({
 		success: true,
-		data: campaigns.map(formatCampaignResponse),
+		data: formattedCampaigns,
 		pagination: {
 			total,
 			page: Number(page),
@@ -133,15 +212,17 @@ export const getCampaignById = catchAsync(
 
 		const campaign = await Campaign.findById(campaignId)
 			.populate("organizations", "name email phone address")
-			.populate("causes", "title description targetAmount raisedAmount");
+			.populate("causes", "title description targetAmount"); // raisedAmount removed - calculated dynamically
 
 		if (!campaign) {
 			throw new AppError("Campaign not found", 404);
 		}
 
+		const formattedCampaign = await formatCampaignResponse(campaign);
+
 		res.status(200).json({
 			success: true,
-			data: formatCampaignResponse(campaign),
+			data: formattedCampaign,
 		});
 	}
 );
@@ -154,7 +235,7 @@ export const getCampaignDetails = catchAsync(
 
 			const campaign = await Campaign.findById(campaignId)
 				.populate("organizations", "name email phone address")
-				.populate("causes", "title description targetAmount raisedAmount");
+				.populate("causes", "title description targetAmount"); // raisedAmount removed - calculated dynamically
 
 			if (!campaign) {
 				throw new AppError("Campaign not found", 404);
@@ -176,10 +257,12 @@ export const getCampaignDetails = catchAsync(
 				},
 			]);
 
+			const formattedCampaign = await formatCampaignResponse(campaign);
+
 			res.status(200).json({
 				success: true,
 				data: {
-					campaign: formatCampaignResponse(campaign),
+					campaign: formattedCampaign,
 					donationStats,
 				},
 			});
@@ -266,22 +349,23 @@ export const createCampaign = catchAsync(
 			totalTargetAmount,
 			imageUrl: imageUrl || "https://placehold.co/600x400?text=Campaign",
 			status: status || "draft",
-			totalRaisedAmount: 0,
-			totalSupporters: 0,
+			// totalRaisedAmount and totalSupporters removed - calculated dynamically
 		});
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount raisedAmount",
+			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
 		});
 		await campaign.populate({
 			path: "organizations",
 			select: "name email phone",
 		});
 
+		const formattedCampaign = await formatCampaignResponse(campaign);
+
 		res.status(201).json({
 			success: true,
-			data: formatCampaignResponse(campaign),
+			data: formattedCampaign,
 		});
 	}
 );
@@ -377,16 +461,18 @@ export const updateCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount raisedAmount",
+			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
 		});
 		await campaign.populate({
 			path: "organizations",
 			select: "name email phone",
 		});
 
+		const formattedCampaign = await formatCampaignResponse(campaign);
+
 		res.status(200).json({
 			success: true,
-			data: formatCampaignResponse(campaign),
+			data: formattedCampaign,
 		});
 	}
 );
@@ -503,16 +589,18 @@ export const addCauseToCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount raisedAmount",
+			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
 		});
 		await campaign.populate({
 			path: "organizations",
 			select: "name email phone",
 		});
 
+		const formattedCampaign = await formatCampaignResponse(campaign);
+
 		res.status(200).json({
 			success: true,
-			data: formatCampaignResponse(campaign),
+			data: formattedCampaign,
 		});
 	}
 );
@@ -556,16 +644,18 @@ export const removeCauseFromCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount raisedAmount",
+			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
 		});
 		await campaign.populate({
 			path: "organizations",
 			select: "name email phone",
 		});
 
+		const formattedCampaign = await formatCampaignResponse(campaign);
+
 		res.status(200).json({
 			success: true,
-			data: formatCampaignResponse(campaign),
+			data: formattedCampaign,
 		});
 	}
 );

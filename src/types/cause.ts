@@ -1,57 +1,57 @@
 // Cause types
 export interface Cause {
-  id: string;
-  title: string;
-  description: string;
-  targetAmount: number;
-  raisedAmount: number;
-  imageUrl: string;
-  tags: string[];
-  category?: string;
-  status?: 'active' | 'completed' | 'draft';
-  organizationId: string;
-  organizationName?: string;
-  createdAt: string;
-  updatedAt: string;
+	id: string;
+	title: string;
+	description: string;
+	targetAmount: number;
+	// raisedAmount removed - calculated dynamically from donations
+	imageUrl: string;
+	tags: string[];
+	category?: string;
+	status?: "active" | "completed" | "draft";
+	organizationId: string;
+	organizationName?: string;
+	createdAt: string;
+	updatedAt: string;
 }
 
 export interface CauseResponse {
-  success: boolean;
-  cause: Cause;
+	success: boolean;
+	cause: Cause;
 }
 
 export interface CausesResponse {
-  success: boolean;
-  causes: Cause[];
-  total: number;
-  page: number;
-  limit: number;
+	success: boolean;
+	causes: Cause[];
+	total: number;
+	page: number;
+	limit: number;
 }
 
 export interface CauseQueryParams {
-  page?: number;
-  limit?: number;
-  search?: string;
-  tag?: string;
-  sort?: string;
+	page?: number;
+	limit?: number;
+	search?: string;
+	tag?: string;
+	sort?: string;
 }
 
 export interface CreateCauseBody {
-  title: string;
-  description: string;
-  targetAmount: number;
-  imageUrl: string;
-  tags?: string[];
-  category?: string;
-  status?: 'active' | 'completed' | 'draft';
+	title: string;
+	description: string;
+	targetAmount: number;
+	imageUrl: string;
+	tags?: string[];
+	category?: string;
+	status?: "active" | "completed" | "draft";
 }
 
 export interface UpdateCauseBody {
-  title?: string;
-  description?: string;
-  targetAmount?: number;
-  imageUrl?: string;
-  tags?: string[];
-  category?: string;
-  status?: 'active' | 'completed' | 'draft';
+	title?: string;
+	description?: string;
+	targetAmount?: number;
+	imageUrl?: string;
+	tags?: string[];
+	category?: string;
+	status?: "active" | "completed" | "draft";
 }

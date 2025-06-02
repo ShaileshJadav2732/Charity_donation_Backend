@@ -6,6 +6,8 @@ import {
 	getCampaignDetails,
 	updateCampaign,
 	deleteCampaign,
+	addCauseToCampaign,
+	removeCauseFromCampaign,
 } from "../controllers/campaign.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";

@@ -5,6 +5,7 @@ import Cause from "../models/cause.model";
 import Donation from "../models/donation.model";
 import User from "../models/user.model";
 import DonorProfile from "../models/donor.model";
+import Campaign from "../models/campaign.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { AuthRequest } from "../types";
@@ -303,10 +304,10 @@ export const getOrganizationDonors = catchAsync(
 		);
 		const averageDonation =
 			totalFundsRaised /
-			donorsAggregation.reduce(
-				(sum, donor) => sum + donor.totalDonations,
-				0
-			) || 0;
+				donorsAggregation.reduce(
+					(sum, donor) => sum + donor.totalDonations,
+					0
+				) || 0;
 
 		res.status(200).json({
 			success: true,
@@ -323,6 +324,117 @@ export const getOrganizationDonors = catchAsync(
 					totalFundsRaised: Math.round(totalFundsRaised * 100) / 100,
 					averageDonation: Math.round(averageDonation * 100) / 100,
 				},
+			},
+		});
+	}
+);
+
+// Helper function to calculate campaign totals from donations
+const calculateCampaignTotals = async (campaignId: string) => {
+	const result = await Donation.aggregate([
+		{
+			$match: {
+				campaign: new mongoose.Types.ObjectId(campaignId),
+				status: { $ne: "CANCELLED" },
+			},
+		},
+		{
+			$group: {
+				_id: null,
+				totalRaisedAmount: { $sum: "$amount" },
+				totalSupporters: { $addToSet: "$donor" },
+			},
+		},
+		{
+			$project: {
+				totalRaisedAmount: 1,
+				totalSupporters: { $size: "$totalSupporters" },
+			},
+		},
+	]);
+
+	return result.length > 0
+		? {
+				totalRaisedAmount: result[0].totalRaisedAmount || 0,
+				totalSupporters: result[0].totalSupporters || 0,
+			}
+		: { totalRaisedAmount: 0, totalSupporters: 0 };
+};
+
+// Helper function to format campaign response
+const formatCampaignResponse = async (campaign: any) => {
+	// Calculate real-time totals from donations
+	const { totalRaisedAmount, totalSupporters } = await calculateCampaignTotals(
+		campaign._id.toString()
+	);
+
+	return {
+		id: campaign._id.toString(),
+		title: campaign.title,
+		description: campaign.description,
+		startDate: campaign.startDate.toISOString(),
+		endDate: campaign.endDate.toISOString(),
+		status: campaign.status,
+		totalTargetAmount: campaign.totalTargetAmount,
+		totalRaisedAmount: totalRaisedAmount, // Use calculated value
+		totalSupporters: totalSupporters, // Use calculated value
+		imageUrl: campaign.imageUrl,
+		tags: campaign.tags || [],
+		acceptedDonationTypes: campaign.acceptedDonationTypes,
+		organizations: campaign.organizations || [],
+		causes: campaign.causes || [],
+		createdAt: campaign.createdAt.toISOString(),
+		updatedAt: campaign.updatedAt.toISOString(),
+	};
+};
+
+// Get campaigns for a specific organization
+export const getOrganizationCampaigns = catchAsync(
+	async (req: Request, res: Response) => {
+		const { organizationId } = req.params;
+		const page = parseInt(req.query.page as string) || 1;
+		const limit = parseInt(req.query.limit as string) || 10;
+		const search = req.query.search as string;
+		const status = req.query.status as string;
+
+		if (!mongoose.Types.ObjectId.isValid(organizationId)) {
+			throw new AppError("Invalid organization ID", 400);
+		}
+
+		const query: any = { organizations: organizationId };
+
+		if (search) {
+			query.$text = { $search: search };
+		}
+
+		if (status && status !== "all") {
+			query.status = status;
+		}
+
+		const skip = (page - 1) * limit;
+
+		const [campaigns, total] = await Promise.all([
+			Campaign.find(query)
+				.sort({ createdAt: -1 })
+				.skip(skip)
+				.limit(limit)
+				.populate("organizations", "name email phone")
+				.populate("causes", "title description targetAmount"), // raisedAmount removed - calculated dynamically
+			Campaign.countDocuments(query),
+		]);
+
+		// Format campaigns with calculated totals
+		const formattedCampaigns = await Promise.all(
+			campaigns.map((campaign) => formatCampaignResponse(campaign))
+		);
+
+		res.status(200).json({
+			success: true,
+			data: formattedCampaigns,
+			pagination: {
+				total,
+				page,
+				pages: Math.ceil(total / limit),
 			},
 		});
 	}

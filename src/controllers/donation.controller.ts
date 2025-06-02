@@ -160,14 +160,17 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 		const total = await Donation.countDocuments(query);
 
 		// Debug logging for receipt images
-		console.log("📋 Donations with receipt info:", donations.map(d => ({
-			id: d._id,
-			status: d.status,
-			receiptImage: d.receiptImage,
-			pdfReceiptUrl: d.pdfReceiptUrl,
-			hasReceiptImage: !!d.receiptImage,
-			hasPdfReceipt: !!d.pdfReceiptUrl
-		})));
+		console.log(
+			"📋 Donations with receipt info:",
+			donations.map((d) => ({
+				id: d._id,
+				status: d.status,
+				receiptImage: d.receiptImage,
+				pdfReceiptUrl: d.pdfReceiptUrl,
+				hasReceiptImage: !!d.receiptImage,
+				hasPdfReceipt: !!d.pdfReceiptUrl,
+			}))
+		);
 
 		res.status(200).json({
 			success: true,
@@ -224,9 +227,13 @@ export const getDonationById = async (req: Request, res: Response) => {
 			// Check if user is from the organization
 			let isOrganization = false;
 			if (req.user.role === "organization") {
-				const organization = await Organization.findOne({ userId: req.user._id });
+				const organization = await Organization.findOne({
+					userId: req.user._id,
+				});
 				if (organization) {
-					isOrganization = organization._id.toString() === donation.organization._id.toString();
+					isOrganization =
+						organization._id.toString() ===
+						donation.organization._id.toString();
 				}
 			}
 
@@ -542,15 +549,15 @@ export const getItemDonationTypeAnalytics = async (
 				unit: d.unit,
 				cause: d.cause
 					? {
-						id: (d.cause as any)._id,
-						title: (d.cause as any).title,
-					}
+							id: (d.cause as any)._id,
+							title: (d.cause as any).title,
+						}
 					: null,
 				organization: d.organization
 					? {
-						id: (d.organization as any)._id,
-						name: (d.organization as any).name,
-					}
+							id: (d.organization as any)._id,
+							name: (d.organization as any).name,
+						}
 					: null,
 				createdAt: d.createdAt,
 			})),
@@ -952,10 +959,11 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			// Find the cause and update its raisedAmount
 			const causeId = donation.cause;
 			const cause = await Cause.findById(causeId);
-			if (cause) {
-				cause.raisedAmount += donation.amount;
-				await cause.save();
-			}
+			// Note: raisedAmount is now calculated dynamically, no need to update manually
+			// if (cause) {
+			//   cause.raisedAmount += donation.amount;
+			//   await cause.save();
+			// }
 		}
 
 		// Save the updated donation
@@ -1094,8 +1102,8 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 
 		// Store photo metadata for better tracking (including Cloudinary info)
 		donation.receiptImageMetadata = {
-			originalName: cloudinaryResult.public_id.split('/').pop() || 'unknown',
-			mimeType: 'image/jpeg', // Cloudinary optimizes to JPEG by default
+			originalName: cloudinaryResult.public_id.split("/").pop() || "unknown",
+			mimeType: "image/jpeg", // Cloudinary optimizes to JPEG by default
 			fileSize: 0, // Cloudinary doesn't provide file size in response
 			uploadedAt: new Date(),
 			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
@@ -1112,10 +1120,11 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			// Find the cause and update its raisedAmount
 			const causeId = donation.cause;
 			const cause = await Cause.findById(causeId);
-			if (cause) {
-				cause.raisedAmount += donation.amount;
-				await cause.save();
-			}
+			// Note: raisedAmount is now calculated dynamically, no need to update manually
+			// if (cause) {
+			//   cause.raisedAmount += donation.amount;
+			//   await cause.save();
+			// }
 		}
 
 		// Save the updated donation
@@ -1457,7 +1466,9 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		console.log("📊 Required status:", DonationStatus.RECEIVED);
 
 		if (donation.status !== DonationStatus.RECEIVED) {
-			console.log("❌ Status check failed - donation is not in RECEIVED status");
+			console.log(
+				"❌ Status check failed - donation is not in RECEIVED status"
+			);
 			return res.status(400).json({
 				success: false,
 				message: "Only received donations can be marked as confirmed",
@@ -1508,7 +1519,9 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			donation.receiptImageMetadata = {};
 		}
 		donation.receiptImageMetadata.confirmedAt = new Date();
-		donation.receiptImageMetadata.confirmedBy = new mongoose.Types.ObjectId(req.user._id);
+		donation.receiptImageMetadata.confirmedBy = new mongoose.Types.ObjectId(
+			req.user._id
+		);
 
 		// Save the updated donation
 		await donation.save();

@@ -1,30 +1,5 @@
-export enum DonationType {
-	MONEY = "MONEY",
-	CLOTHES = "CLOTHES",
-	BLOOD = "BLOOD",
-	FOOD = "FOOD",
-	TOYS = "TOYS",
-	BOOKS = "BOOKS",
-	FURNITURE = "FURNITURE",
-	HOUSEHOLD = "HOUSEHOLD",
-	OTHER = "OTHER",
-}
-
-export enum DonationStatus {
-	PENDING = "PENDING",
-	APPROVED = "APPROVED",
-	RECEIVED = "RECEIVED",
-	CONFIRMED = "CONFIRMED",
-	CANCELLED = "CANCELLED",
-}
-
-export interface Address {
-	street: string;
-	city: string;
-	state: string;
-	zipCode: string;
-	country: string;
-}
+// Import shared types from central location
+import { DonationType, DonationStatus, Address } from "./index";
 
 export interface Organization {
 	_id: string;
@@ -36,7 +11,7 @@ export interface DonationFormData {
 	donor: string; // Optional if backend uses auth token
 	organization: string;
 	cause: string;
-	type: string;
+	type: DonationType; // Use enum instead of string for type safety
 	amount?: number;
 	description: string;
 	quantity?: number;
@@ -46,20 +21,8 @@ export interface DonationFormData {
 	isPickup: boolean;
 	contactPhone: string;
 	contactEmail: string;
-	pickupAddress?: {
-		street: string;
-		city: string;
-		state: string;
-		zipCode: string;
-		country: string;
-	};
-	dropoffAddress?: {
-		street: string;
-		city: string;
-		state: string;
-		zipCode: string;
-		country: string;
-	};
+	pickupAddress?: Address;
+	dropoffAddress?: Address;
 }
 
 export interface DonationResponse {

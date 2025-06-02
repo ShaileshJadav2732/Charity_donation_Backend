@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import Donation, { DonationType, DonationStatus } from "../models/donation.model";
+import Donation, {
+	DonationType,
+	DonationStatus,
+} from "../models/donation.model";
 import User from "../models/user.model";
 import Organization from "../models/organization.model";
 import Cause from "../models/cause.model";
@@ -8,7 +11,8 @@ import Cause from "../models/cause.model";
 // Load environment variables
 dotenv.config();
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/charity_donation";
+const MONGODB_URI =
+	process.env.MONGODB_URI || "mongodb://localhost:27017/charity_donation";
 
 const testDonationFlow = async () => {
 	try {
@@ -27,7 +31,9 @@ const testDonationFlow = async () => {
 		// Find an organization user
 		const orgUser = await User.findOne({ role: "organization" });
 		if (!orgUser) {
-			console.log("No organization user found. Please create an organization user first.");
+			console.log(
+				"No organization user found. Please create an organization user first."
+			);
 			return;
 		}
 		console.log(`Found organization user: ${orgUser.email}`);
@@ -43,11 +49,14 @@ const testDonationFlow = async () => {
 		// Find a cause belonging to this organization
 		const cause = await Cause.findOne({ organizationId: organization._id });
 		if (!cause) {
-			console.log("No cause found for this organization. Please create a cause first.");
+			console.log(
+				"No cause found for this organization. Please create a cause first."
+			);
 			return;
 		}
 		console.log(`Found cause: ${cause.title}`);
-		console.log(`Current raised amount: ₹${cause.raisedAmount}`);
+		// Note: raisedAmount is now calculated dynamically, not stored in DB
+		console.log(`Cause found: ${cause.title}`);
 
 		// Create a test donation
 		const testDonation = new Donation({
@@ -69,12 +78,9 @@ const testDonationFlow = async () => {
 		await testDonation.save();
 		console.log(`Created test donation: ${testDonation._id}`);
 
-		// Update the cause's raised amount (this should happen automatically in real flow)
-		// For item donations, we'll add a symbolic amount
-		const symbolicAmount = 500; // ₹500 for 10 pieces of clothes
-		cause.raisedAmount += symbolicAmount;
-		await cause.save();
-		console.log(`Updated cause raised amount to: ₹${cause.raisedAmount}`);
+		// Note: raisedAmount is now calculated dynamically from donations
+		// No need to manually update cause.raisedAmount
+		console.log(`Donation created successfully`);
 
 		// Test queries that the frontend would make
 
@@ -83,7 +89,7 @@ const testDonationFlow = async () => {
 			.populate("organization", "name")
 			.populate("cause", "title");
 		console.log(`\nDonor has ${donorDonations.length} donations:`);
-		donorDonations.forEach(d => {
+		donorDonations.forEach((d) => {
 			console.log(`- ${d.type}: ${d.description} (Status: ${d.status})`);
 		});
 
@@ -92,25 +98,30 @@ const testDonationFlow = async () => {
 			.populate("donor", "email")
 			.populate("cause", "title");
 		console.log(`\nOrganization has ${orgDonations.length} donations:`);
-		orgDonations.forEach(d => {
-			console.log(`- ${d.type}: ${d.description} (Status: ${d.status}) from ${(d.donor as any)?.email}`);
+		orgDonations.forEach((d) => {
+			console.log(
+				`- ${d.type}: ${d.description} (Status: ${d.status}) from ${(d.donor as any)?.email}`
+			);
 		});
 
 		// 3. Check analytics for CLOTHES donations
 		const clothesDonations = await Donation.find({
 			organization: organization._id,
 			type: DonationType.CLOTHES,
-			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] }
+			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
 		});
-		console.log(`\nOrganization has ${clothesDonations.length} CLOTHES donations in CONFIRMED/RECEIVED status`);
+		console.log(
+			`\nOrganization has ${clothesDonations.length} CLOTHES donations in CONFIRMED/RECEIVED status`
+		);
 
-		// 4. Check cause progress
+		// 4. Check cause progress (using dynamic calculation)
 		const updatedCause = await Cause.findById(cause._id);
-		const progress = updatedCause ? (updatedCause.raisedAmount / updatedCause.targetAmount) * 100 : 0;
-		console.log(`\nCause progress: ${progress.toFixed(1)}% (₹${updatedCause?.raisedAmount} / ₹${updatedCause?.targetAmount})`);
+		// Note: raisedAmount is now calculated dynamically, not stored in DB
+		console.log(
+			`\nCause found: ${updatedCause?.title} (Target: ₹${updatedCause?.targetAmount})`
+		);
 
 		console.log("\n✅ Donation flow test completed successfully!");
-
 	} catch (error) {
 		console.error("Error testing donation flow:", error);
 	} finally {

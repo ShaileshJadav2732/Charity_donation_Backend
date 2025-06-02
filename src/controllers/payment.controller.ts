@@ -46,7 +46,7 @@ const sendWebhookNotifications = async (
 				recipient: organizationData.userId.toString(),
 				type: NotificationType.DONATION_RECEIVED,
 				title: "Payment Confirmed - New Donation!",
-				message: `Payment confirmed! You received ₹${amount} from ${donorData.firstName} ${donorData.lastName} for ${causeData?.title || 'your cause'}.`,
+				message: `Payment confirmed! You received ₹${amount} from ${donorData.firstName} ${donorData.lastName} for ${causeData?.title || "your cause"}.`,
 				data: {
 					donationId: donation._id.toString(),
 					amount: amount,
@@ -73,7 +73,7 @@ const sendWebhookNotifications = async (
 		console.error("❌ Failed to send webhook notifications:", error);
 	}
 };
-// 
+//
 // interface CreatePaymentIntentRequest {
 // 	amount: number;
 // 	cause: string;
@@ -95,7 +95,7 @@ const sendWebhookNotifications = async (
 // 		contactEmail: string;
 // 	};
 // }
-// 
+//
 // export const createPaymentIntent = async (req: Request, res: Response) => {
 // 	try {
 // 		const {
@@ -107,42 +107,42 @@ const sendWebhookNotifications = async (
 // 			contactPhone,
 // 			contactEmail,
 // 		}: CreatePaymentIntentRequest = req.body;
-// 
+//
 // 		if (!req.user?.id) {
 // 			return res.status(401).json({ message: "User not authenticated" });
 // 		}
-// 
+//
 // 		// Validate required fields
 // 		if (!amount || !cause || !organization || !description) {
 // 			return res.status(400).json({
 // 				message: "Amount, cause, organization, and description are required",
 // 			});
 // 		}
-// 
+//
 // 		// Validate amount (minimum ₹50 for Stripe INR requirements)
 // 		if (amount < 50) {
 // 			return res.status(400).json({
 // 				message: "Amount must be at least ₹50",
 // 			});
 // 		}
-// 
+//
 // 		// Verify cause and organization exist
 // 		const causeDoc = await Cause.findById(cause);
 // 		const orgDoc = await Organization.findById(organization);
-// 
+//
 // 		if (!causeDoc) {
 // 			return res.status(404).json({ message: "Cause not found" });
 // 		}
-// 
+//
 // 		if (!orgDoc) {
 // 			return res.status(404).json({ message: "Organization not found" });
 // 		}
-// 
+//
 // 		// Check for existing pending payment intent for the same user and cause
 // 		const existingPaymentIntents = await stripe.paymentIntents.list({
 // 			limit: 50, // Increase limit to check more intents
 // 		});
-// 
+//
 // 		const duplicateIntent = existingPaymentIntents.data.find(
 // 			(intent) =>
 // 				intent.metadata.donorId === req.user.id.toString() &&
@@ -152,14 +152,14 @@ const sendWebhookNotifications = async (
 // 					intent.status === "requires_confirmation" ||
 // 					intent.status === "requires_action")
 // 		);
-// 
+//
 // 		if (duplicateIntent) {
 // 			return res.status(200).json({
 // 				clientSecret: duplicateIntent.client_secret,
 // 				paymentIntentId: duplicateIntent.id,
 // 			});
 // 		}
-// 
+//
 // 		// Create payment intent with Stripe
 // 		const paymentIntent = await stripe.paymentIntents.create({
 // 			amount: Math.round(amount * 100), // Convert to paise (smallest unit of INR)
@@ -175,7 +175,7 @@ const sendWebhookNotifications = async (
 // 				contactEmail,
 // 			},
 // 		});
-// 
+//
 // 		res.status(200).json({
 // 			clientSecret: paymentIntent.client_secret,
 // 			paymentIntentId: paymentIntent.id,
@@ -191,18 +191,18 @@ const sendWebhookNotifications = async (
 // export const confirmPayment = async (req: Request, res: Response) => {
 // 	try {
 // 		const { paymentIntentId, donationData }: ConfirmPaymentRequest = req.body;
-// 
+//
 // 		if (!req.user?.id) {
 // 			return res.status(401).json({ message: "User not authenticated" });
 // 		}
-// 
+//
 // 		if (!paymentIntentId) {
 // 			return res.status(400).json({ message: "Payment intent ID is required" });
 // 		}
-// 
+//
 // 		// Retrieve payment intent from Stripe
 // 		const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-// 
+//
 // 		// Accept both succeeded and processing statuses
 // 		if (
 // 			paymentIntent.status !== "succeeded" &&
@@ -213,19 +213,19 @@ const sendWebhookNotifications = async (
 // 				status: paymentIntent.status,
 // 			});
 // 		}
-// 
+//
 // 		// Verify the payment belongs to the authenticated user
 // 		if (paymentIntent.metadata.donorId !== req.user.id.toString()) {
 // 			return res.status(403).json({
 // 				message: "Payment does not belong to authenticated user",
 // 			});
 // 		}
-// 
+//
 // 		// Check if donation already exists for this payment
 // 		const existingDonation = await Donation.findOne({
 // 			paymentIntentId: paymentIntentId,
 // 		});
-// 
+//
 // 		if (existingDonation) {
 // 			// Return the existing donation instead of error
 // 			const populatedDonation = await Donation.findById(existingDonation._id)
@@ -233,14 +233,14 @@ const sendWebhookNotifications = async (
 // 				.populate("organization", "name email")
 // 				.populate("cause", "title")
 // 				.populate("campaign", "title");
-// 
+//
 // 			return res.status(200).json({
 // 				success: true,
 // 				data: populatedDonation,
 // 				message: "Donation already processed for this payment",
 // 			});
 // 		}
-// 
+//
 // 		// Create donation record
 // 		const donation = new Donation({
 // 			donor: req.user._id,
@@ -257,9 +257,9 @@ const sendWebhookNotifications = async (
 // 			paymentStatus: paymentIntent.status, // Store Stripe payment status
 // 			isPickup: false, // Monetary donations don't require pickup
 // 		});
-// 
+//
 // 		await donation.save();
-// 
+//
 // 		// Update cause raised amount only if not already updated
 // 		const cause = await Cause.findById(donationData.cause);
 // 		if (cause) {
@@ -269,7 +269,7 @@ const sendWebhookNotifications = async (
 // 				paymentIntentId: paymentIntentId,
 // 				status: { $in: [DonationStatus.APPROVED, DonationStatus.CONFIRMED] },
 // 			});
-// 
+//
 // 			if (!existingDonationAmount) {
 // 				cause.raisedAmount += donation.amount!;
 // 				await cause.save();
@@ -278,23 +278,23 @@ const sendWebhookNotifications = async (
 // 				);
 // 			}
 // 		}
-// 
+//
 // 		// Populate donation for response
 // 		const populatedDonation = await Donation.findById(donation._id)
 // 			.populate("donor", "firstName lastName email")
 // 			.populate("organization", "name email userId")
 // 			.populate("cause", "title")
 // 			.populate("campaign", "title");
-// 
+//
 // 		// Get Socket.IO instance for notifications
 // 		const io = req.app.get("io");
 // 		const notificationService = new NotificationService(io);
-// 
+//
 // 		// Send notifications and emails
 // 		const organizationData = populatedDonation?.organization as any;
 // 		const donorData = populatedDonation?.donor as any;
 // 		const causeData = populatedDonation?.cause as any;
-// 
+//
 // 		if (organizationData && donorData) {
 // 			try {
 // 				// 1. Send real-time notification to organization
@@ -311,7 +311,7 @@ const sendWebhookNotifications = async (
 // 						status: DonationStatus.PENDING,
 // 					},
 // 				});
-// 
+//
 // 				// 2. Send email notification to organization
 // 				await sendEmail(
 // 					organizationData.email,
@@ -321,7 +321,7 @@ const sendWebhookNotifications = async (
 // 					undefined,
 // 					undefined
 // 				);
-// 
+//
 // 				// 3. Send confirmation email to donor
 // 				await sendEmail(
 // 					donorData.email,
@@ -331,13 +331,13 @@ const sendWebhookNotifications = async (
 // 					undefined,
 // 					undefined
 // 				);
-// 
+//
 // 			} catch (notificationError) {
 // 				console.error("Failed to send notifications:", notificationError);
 // 				// Don't fail the payment if notifications fail
 // 			}
 // 		}
-// 
+//
 // 		res.status(201).json({
 // 			success: true,
 // 			data: populatedDonation,
@@ -557,19 +557,26 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 				// ✅ Update cause raised amount
 				if (causeId && amount) {
 					const cause = await Cause.findById(causeId);
-					if (cause) {
-						cause.raisedAmount += amount;
-						await cause.save();
-						console.log(
-							`📈 Cause ${causeId} raised amount updated by ₹${amount}`
-						);
-					}
+					// Note: raisedAmount is now calculated dynamically, no need to update manually
+					// if (cause) {
+					//   cause.raisedAmount += amount;
+					//   await cause.save();
+					//   console.log(
+					//     `📈 Cause ${causeId} raised amount updated by ₹${amount}`
+					//   );
+					// }
 				}
 			}
 
 			// 🔔 Send notifications and emails via webhook
-			await sendWebhookNotifications(req, donation, organizationId, donorId, causeId, amount);
-
+			await sendWebhookNotifications(
+				req,
+				donation,
+				organizationId,
+				donorId,
+				causeId,
+				amount
+			);
 		} catch (err) {
 			console.error("❌ Failed to process payment data:", err);
 		}

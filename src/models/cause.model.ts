@@ -5,7 +5,7 @@ export interface ICause extends Document {
 	title: string;
 	description: string;
 	targetAmount: number;
-	raisedAmount: number;
+	// raisedAmount removed - calculated dynamically from donations
 	imageUrl: string;
 	tags: string[];
 	organizationId: mongoose.Types.ObjectId;
@@ -33,11 +33,7 @@ const CauseSchema: Schema = new Schema(
 			required: [true, "Target amount is required"],
 			min: [0, "Target amount cannot be negative"],
 		},
-		raisedAmount: {
-			type: Number,
-			default: 0,
-			min: [0, "Raised amount cannot be negative"],
-		},
+		// raisedAmount field removed - calculated dynamically from donations
 		imageUrl: {
 			type: String,
 			required: [true, "Image URL is required"],
