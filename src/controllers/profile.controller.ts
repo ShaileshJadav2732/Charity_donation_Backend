@@ -189,6 +189,7 @@ export const getDonorProfile = async (req: AuthRequest, res: Response) => {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
+		console.log("📋 Fetching donor profile - Cover Image:", donorProfile.coverImage);
 		return res.status(200).json({ profile: donorProfile });
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });
@@ -215,11 +216,138 @@ export const getOrganizationProfile = async (
 				.json({ message: "Organization profile not found" });
 		}
 
+		console.log("📋 Fetching organization profile - Cover Image:", orgProfile.coverImage);
 		return res.status(200).json({ profile: orgProfile });
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });
 	}
 };
+
+// Update donor profile
+export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
+	try {
+		if (!req.user) {
+			return res.status(401).json({ message: "Unauthorized" });
+		}
+
+		// Check if user exists and has donor role
+		const user = await User.findById(req.user.id);
+		if (!user) {
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		if (user.role !== "donor") {
+			return res
+				.status(403)
+				.json({ message: "Only donors can update this profile" });
+		}
+
+		// Find donor profile
+		const donorProfile = await DonorProfile.findOne({ userId: req.user.id });
+		if (!donorProfile) {
+			return res.status(404).json({ message: "Donor profile not found" });
+		}
+
+		// Update profile fields that are provided (only allowed fields)
+		const {
+			firstName,
+			lastName,
+			phoneNumber,
+			address,
+			city,
+			state,
+			country,
+			bio,
+			profileImage
+		} = req.body;
+
+		// Update only the fields that are provided and valid
+		if (firstName !== undefined) donorProfile.firstName = firstName;
+		if (lastName !== undefined) donorProfile.lastName = lastName;
+		if (phoneNumber !== undefined) donorProfile.phoneNumber = phoneNumber;
+		if (address !== undefined) donorProfile.address = address;
+		if (city !== undefined) donorProfile.city = city;
+		if (state !== undefined) donorProfile.state = state;
+		if (country !== undefined) donorProfile.country = country;
+		if (bio !== undefined) donorProfile.bio = bio;
+		if (profileImage !== undefined) donorProfile.profileImage = profileImage;
+
+		await donorProfile.save();
+
+		return res.status(200).json({
+			message: "Profile updated successfully",
+			profile: donorProfile,
+		});
+	} catch (error) {
+		console.error("Update donor profile error:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
+};
+
+// Update organization profile
+export const updateOrganizationProfile = async (req: AuthRequest, res: Response) => {
+	try {
+		if (!req.user) {
+			return res.status(401).json({ message: "Unauthorized" });
+		}
+
+		// Check if user exists and has organization role
+		const user = await User.findById(req.user.id);
+		if (!user) {
+			return res.status(404).json({ message: "User not found" });
+		}
+
+		if (user.role !== "organization") {
+			return res
+				.status(403)
+				.json({ message: "Only organizations can update this profile" });
+		}
+
+		// Find organization profile
+		const orgProfile = await OrganizationProfile.findOne({ userId: req.user.id });
+		if (!orgProfile) {
+			return res.status(404).json({ message: "Organization profile not found" });
+		}
+
+		// Update profile fields that are provided (only allowed fields)
+		const {
+			name,
+			description,
+			phoneNumber,
+			email,
+			website,
+			address,
+			city,
+			state,
+			country,
+			logo
+		} = req.body;
+
+		// Update only the fields that are provided and valid
+		if (name !== undefined) orgProfile.name = name;
+		if (description !== undefined) orgProfile.description = description;
+		if (phoneNumber !== undefined) orgProfile.phoneNumber = phoneNumber;
+		if (email !== undefined) orgProfile.email = email;
+		if (website !== undefined) orgProfile.website = website;
+		if (address !== undefined) orgProfile.address = address;
+		if (city !== undefined) orgProfile.city = city;
+		if (state !== undefined) orgProfile.state = state;
+		if (country !== undefined) orgProfile.country = country;
+		if (logo !== undefined) orgProfile.logo = logo;
+
+		await orgProfile.save();
+
+		return res.status(200).json({
+			message: "Profile updated successfully",
+			profile: orgProfile,
+		});
+	} catch (error) {
+		console.error("Update organization profile error:", error);
+		return res.status(500).json({ message: "Server error" });
+	}
+};
+
+
 
 // Upload donor profile image
 export const uploadDonorProfileImage = async (
@@ -231,8 +359,8 @@ export const uploadDonorProfileImage = async (
 			return res.status(401).json({ message: "Unauthorized" });
 		}
 
-		if (!req.file) {
-			return res.status(400).json({ message: "No file uploaded" });
+		if (!req.cloudinaryUrl) {
+			return res.status(400).json({ message: "No image uploaded to cloud storage" });
 		}
 
 		// Check if user exists and has donor role
@@ -253,15 +381,15 @@ export const uploadDonorProfileImage = async (
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
-		// Update profile with new image path
-		const imagePath = `/uploads/profile-photos/${req.file.filename}`;
-		donorProfile.profileImage = imagePath;
+		// Update profile with Cloudinary URL
+		donorProfile.profileImage = req.cloudinaryUrl;
+		donorProfile.cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
 		await donorProfile.save();
 
 		return res.status(200).json({
 			success: true,
 			message: "Profile image uploaded successfully",
-			profileImage: imagePath,
+			profileImage: req.cloudinaryUrl,
 		});
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });

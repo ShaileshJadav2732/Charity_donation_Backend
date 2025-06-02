@@ -42,6 +42,15 @@ const DonorProfileSchema: Schema = new Schema(
     profileImage: {
       type: String,
     },
+    cloudinaryPublicId: {
+      type: String,
+    },
+    coverImage: {
+      type: String,
+    },
+    coverImageCloudinaryId: {
+      type: String,
+    },
     bio: {
       type: String,
     },

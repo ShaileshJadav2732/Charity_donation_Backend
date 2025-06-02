@@ -1,116 +1,78 @@
-import { Server, Socket } from "socket.io";
-import jwt from "jsonwebtoken";
-import User from "../models/user.model";
-import Conversation from "../models/conversation.model";
-import Message from "../models/message.model";
+import { Server, Socket } from 'socket.io';
+import jwt from 'jsonwebtoken';
+import User from '../models/user.model';
+import Conversation from '../models/conversation.model';
+import Message from '../models/message.model';
 
 interface AuthenticatedSocket extends Socket {
 	userId?: string;
 	userRole?: string;
 }
 
-interface JwtPayload {
-	id: string;
-	role: string;
+interface TypingData {
+	conversationId: string;
+	userId: string;
+	userName: string;
+	isTyping: boolean;
 }
 
-// Store connected users
-const connectedUsers = new Map<string, string>(); // userId -> socketId
+interface JoinConversationData {
+	conversationId: string;
+}
 
-// Store online users for messaging
+// Store online users
 const onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
 
 // Store typing users per conversation
 const typingUsers = new Map<string, Set<string>>(); // conversationId -> Set of userIds
 
-export const setupSocketIO = (io: Server) => {
-	// Authentication middleware
-	io.use(async (socket: AuthenticatedSocket, next) => {
+export const setupMessageHandlers = (io: Server) => {
+	io.on('connection', async (socket: AuthenticatedSocket) => {
+		console.log('User connected to messaging:', socket.id);
+
+		// Authenticate user
 		try {
-			const token = socket.handshake.auth.token;
-
+			const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
+			
 			if (!token) {
-				return next(new Error("Authentication error: No token provided"));
+				socket.emit('error', { message: 'Authentication required' });
+				socket.disconnect();
+				return;
 			}
 
-			// Verify JWT token
-			const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
-
-			// Get user from database
+			const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
 			const user = await User.findById(decoded.id);
+
 			if (!user) {
-				return next(new Error("Authentication error: User not found"));
+				socket.emit('error', { message: 'User not found' });
+				socket.disconnect();
+				return;
 			}
 
-			// Attach user info to socket
 			socket.userId = user._id.toString();
 			socket.userRole = user.role;
 
-			next();
-		} catch (error: any) {
-			next(
-				new Error(`Authentication error: ${error?.message || "Unknown error"}`)
-			);
-		}
-	});
-
-	io.on("connection", (socket: AuthenticatedSocket) => {
-		// Store user connection
-		if (socket.userId) {
-			connectedUsers.set(socket.userId, socket.id);
-
-			// Add user to online users for messaging
+			// Add user to online users
 			onlineUsers.set(socket.userId, {
 				socketId: socket.id,
 				lastSeen: new Date(),
 			});
 
-			// Join user to their personal room
-			socket.join(`user:${socket.userId}`);
-
-			// Join role-based rooms
-			if (socket.userRole) {
-				socket.join(`role:${socket.userRole}`);
-			}
-
-			// Send current online users list to the newly connected user
-			const currentOnlineUsers = Array.from(onlineUsers.entries()).map(([userId, data]) => ({
-				userId,
-				isOnline: true,
-				lastSeen: data.lastSeen,
-			}));
-
-			socket.emit('users:online-list', currentOnlineUsers);
-
-			// Broadcast user online status for messaging to other users
+			// Broadcast user online status
 			socket.broadcast.emit('user:online', {
 				userId: socket.userId,
 				isOnline: true,
 				lastSeen: new Date(),
 			});
 
-			console.log(`User ${socket.userId} connected. Online users: ${onlineUsers.size}`);
+			console.log(`User ${socket.userId} connected to messaging`);
+
+		} catch (error) {
+			console.error('Socket authentication error:', error);
+			socket.emit('error', { message: 'Authentication failed' });
+			socket.disconnect();
+			return;
 		}
-
-		socket.on("ping", (data) => {
-			socket.emit("pong", { ...data, serverTime: Date.now() });
-		});
-
-		socket.on("notification:read", (notificationId: string) => { });
-
-		// Handle test notifications (for development)
-		socket.on("test:notification", (data) => {
-			// Echo back to the same user for testing
-			socket.emit("notification:new", {
-				id: `test-${Date.now()}`,
-				type: data.type || "SYSTEM_NOTIFICATION",
-				title: data.title || "Test Notification",
-				message: data.message || "This is a test notification",
-				isRead: false,
-				createdAt: new Date().toISOString(),
-				data: { test: true },
-			});
-		});
 
 		// Join conversation room
 		socket.on('conversation:join', async (conversationId: string) => {
@@ -131,7 +93,7 @@ export const setupSocketIO = (io: Server) => {
 
 				// Join the conversation room
 				socket.join(`conversation_${conversationId}`);
-
+				
 				console.log(`User ${socket.userId} joined conversation ${conversationId}`);
 
 				// Emit confirmation
@@ -150,7 +112,7 @@ export const setupSocketIO = (io: Server) => {
 		});
 
 		// Handle typing indicators
-		socket.on("typing:start", async (data: any) => {
+		socket.on('typing:start', async (data: TypingData) => {
 			try {
 				if (!socket.userId || socket.userId !== data.userId) return;
 
@@ -169,6 +131,9 @@ export const setupSocketIO = (io: Server) => {
 				}
 				typingUsers.get(data.conversationId)!.add(socket.userId);
 
+				// Update conversation typing status
+				await conversation.setTypingStatus(socket.userId, true);
+
 				// Broadcast typing indicator to other participants
 				socket.to(`conversation_${data.conversationId}`).emit('typing:start', {
 					conversationId: data.conversationId,
@@ -184,7 +149,7 @@ export const setupSocketIO = (io: Server) => {
 			}
 		});
 
-		socket.on("typing:stop", async (data: any) => {
+		socket.on('typing:stop', async (data: TypingData) => {
 			try {
 				if (!socket.userId || socket.userId !== data.userId) return;
 
@@ -204,6 +169,9 @@ export const setupSocketIO = (io: Server) => {
 						typingUsers.delete(data.conversationId);
 					}
 				}
+
+				// Update conversation typing status
+				await conversation.setTypingStatus(socket.userId, false);
 
 				// Broadcast typing stop to other participants
 				socket.to(`conversation_${data.conversationId}`).emit('typing:stop', {
@@ -252,14 +220,30 @@ export const setupSocketIO = (io: Server) => {
 			}
 		});
 
-		// Handle disconnection
-		socket.on("disconnect", async (reason) => {
+		// Handle user status updates
+		socket.on('user:status', (data: { status: 'online' | 'away' | 'busy' }) => {
 			if (!socket.userId) return;
 
-			console.log(`User ${socket.userId} disconnected: ${reason}`);
+			// Update user status
+			const userStatus = onlineUsers.get(socket.userId);
+			if (userStatus) {
+				userStatus.lastSeen = new Date();
+				onlineUsers.set(socket.userId, userStatus);
+			}
 
-			// Remove from connected users
-			connectedUsers.delete(socket.userId);
+			// Broadcast status update
+			socket.broadcast.emit('user:status', {
+				userId: socket.userId,
+				status: data.status,
+				lastSeen: new Date(),
+			});
+		});
+
+		// Handle disconnect
+		socket.on('disconnect', async () => {
+			if (!socket.userId) return;
+
+			console.log(`User ${socket.userId} disconnected from messaging`);
 
 			// Remove from online users
 			onlineUsers.delete(socket.userId);
@@ -268,6 +252,16 @@ export const setupSocketIO = (io: Server) => {
 			for (const [conversationId, typingSet] of typingUsers.entries()) {
 				if (typingSet.has(socket.userId)) {
 					typingSet.delete(socket.userId);
+					
+					// Update conversation typing status
+					try {
+						const conversation = await Conversation.findById(conversationId);
+						if (conversation) {
+							await conversation.setTypingStatus(socket.userId, false);
+						}
+					} catch (error) {
+						console.error('Error updating typing status on disconnect:', error);
+					}
 
 					// Broadcast typing stop
 					socket.to(`conversation_${conversationId}`).emit('typing:stop', {
@@ -289,48 +283,15 @@ export const setupSocketIO = (io: Server) => {
 				lastSeen: new Date(),
 			});
 		});
+
+		// Handle errors
+		socket.on('error', (error) => {
+			console.error('Socket error:', error);
+		});
 	});
 };
 
-// Helper function to emit notification to specific user
-export const emitNotificationToUser = (
-	io: Server,
-	userId: string,
-	notification: any
-) => {
-	io.to(`user:${userId}`).emit("notification:new", notification);
-};
-
-// Helper function to emit notification to all users with specific role
-export const emitNotificationToRole = (
-	io: Server,
-	role: string,
-	notification: any
-) => {
-	io.to(`role:${role}`).emit("notification:new", notification);
-};
-
-// Helper function to emit notification to all connected users
-export const emitNotificationToAll = (io: Server, notification: any) => {
-	io.emit("notification:new", notification);
-};
-
-// Helper function to check if user is online
-export const isUserOnline = (userId: string): boolean => {
-	return connectedUsers.has(userId);
-};
-
-// Helper function to get connected users count
-export const getConnectedUsersCount = (): number => {
-	return connectedUsers.size;
-};
-
-// Helper function to get all connected user IDs
-export const getConnectedUserIds = (): string[] => {
-	return Array.from(connectedUsers.keys());
-};
-
-// Helper functions for messaging
+// Helper function to get online users
 export const getOnlineUsers = () => {
 	return Array.from(onlineUsers.entries()).map(([userId, data]) => ({
 		userId,
@@ -339,10 +300,12 @@ export const getOnlineUsers = () => {
 	}));
 };
 
-export const isUserOnlineForMessaging = (userId: string) => {
+// Helper function to check if user is online
+export const isUserOnline = (userId: string) => {
 	return onlineUsers.has(userId);
 };
 
+// Helper function to get typing users for a conversation
 export const getTypingUsers = (conversationId: string) => {
 	return Array.from(typingUsers.get(conversationId) || []);
 };

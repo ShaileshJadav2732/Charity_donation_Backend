@@ -8,6 +8,8 @@ declare global {
 				role: string;
 				email: string;
 			} & Document;
+			cloudinaryUrl?: string;
+			cloudinaryPublicId?: string;
 		}
 	}
 }

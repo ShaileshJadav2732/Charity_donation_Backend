@@ -152,11 +152,22 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 		const donations = await Donation.find(query)
 			.populate("organization", "name email phone")
 			.populate("cause", "title")
+			.select("+receiptImage +pdfReceiptUrl +receiptImageMetadata") // Explicitly include receipt fields
 			.sort({ createdAt: -1 })
 			.skip((Number(page) - 1) * Number(limit))
 			.limit(Number(limit));
 
 		const total = await Donation.countDocuments(query);
+
+		// Debug logging for receipt images
+		console.log("📋 Donations with receipt info:", donations.map(d => ({
+			id: d._id,
+			status: d.status,
+			receiptImage: d.receiptImage,
+			pdfReceiptUrl: d.pdfReceiptUrl,
+			hasReceiptImage: !!d.receiptImage,
+			hasPdfReceipt: !!d.pdfReceiptUrl
+		})));
 
 		res.status(200).json({
 			success: true,
@@ -171,6 +182,70 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 		res.status(500).json({
 			success: false,
 			message: "Error fetching donations",
+			error: error?.message || "Unknown error occurred",
+		});
+	}
+};
+
+// Get a single donation by ID with full details
+export const getDonationById = async (req: Request, res: Response) => {
+	try {
+		const { id } = req.params;
+
+		if (!mongoose.Types.ObjectId.isValid(id)) {
+			return res.status(400).json({
+				success: false,
+				message: "Invalid donation ID",
+			});
+		}
+
+		const donation = await Donation.findById(id)
+			.populate("donor", "firstName lastName email")
+			.populate("organization", "name email phone")
+			.populate("cause", "title")
+			.populate("campaign", "title")
+			.select("+receiptImage +pdfReceiptUrl +receiptImageMetadata");
+
+		if (!donation) {
+			return res.status(404).json({
+				success: false,
+				message: "Donation not found",
+			});
+		}
+
+		// Check if user has permission to view this donation
+		if (req.user?._id) {
+			const userId = req.user._id.toString();
+			const donorId = donation.donor._id.toString();
+
+			// Check if user is the donor
+			const isDonor = userId === donorId;
+
+			// Check if user is from the organization
+			let isOrganization = false;
+			if (req.user.role === "organization") {
+				const organization = await Organization.findOne({ userId: req.user._id });
+				if (organization) {
+					isOrganization = organization._id.toString() === donation.organization._id.toString();
+				}
+			}
+
+			if (!isDonor && !isOrganization && req.user.role !== "admin") {
+				return res.status(403).json({
+					success: false,
+					message: "You don't have permission to view this donation",
+				});
+			}
+		}
+
+		res.status(200).json({
+			success: true,
+			data: donation,
+		});
+	} catch (error: any) {
+		res.status(500).json({
+			success: false,
+			message: "Error fetching donation",
 			error: error?.message || "Unknown error occurred",
 		});
 	}
@@ -467,15 +542,15 @@ export const getItemDonationTypeAnalytics = async (
 				unit: d.unit,
 				cause: d.cause
 					? {
-							id: (d.cause as any)._id,
-							title: (d.cause as any).title,
-						}
+						id: (d.cause as any)._id,
+						title: (d.cause as any).title,
+					}
 					: null,
 				organization: d.organization
 					? {
-							id: (d.organization as any)._id,
-							name: (d.organization as any).name,
-						}
+						id: (d.organization as any)._id,
+						name: (d.organization as any).name,
+					}
 					: null,
 				createdAt: d.createdAt,
 			})),
@@ -967,11 +1042,12 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Check if a photo was uploaded
-		if (!req.file) {
+		// Check if Cloudinary upload was successful
+		const cloudinaryResult = (req as any).cloudinaryResult;
+		if (!cloudinaryResult) {
 			return res.status(400).json({
 				success: false,
-				message: "Photo is required to mark donation as received",
+				message: "Photo upload to cloud storage failed",
 			});
 		}
 
@@ -1009,20 +1085,22 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Get the photo file path
-		const photoUrl = `/uploads/donation-photos/${req.file.filename}`;
+		// Get the Cloudinary URL
+		const photoUrl = cloudinaryResult.url;
 
 		// Update donation status and receipt image
 		donation.status = DonationStatus.RECEIVED;
 		donation.receiptImage = photoUrl;
 
-		// Store photo metadata for better tracking
+		// Store photo metadata for better tracking (including Cloudinary info)
 		donation.receiptImageMetadata = {
-			originalName: req.file.originalname,
-			mimeType: req.file.mimetype,
-			fileSize: req.file.size,
+			originalName: cloudinaryResult.public_id.split('/').pop() || 'unknown',
+			mimeType: 'image/jpeg', // Cloudinary optimizes to JPEG by default
+			fileSize: 0, // Cloudinary doesn't provide file size in response
 			uploadedAt: new Date(),
 			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
+			cloudinaryPublicId: cloudinaryResult.public_id,
+			cloudinaryUrl: cloudinaryResult.url,
 		};
 
 		// If it's a monetary donation, update the cause's raisedAmount
@@ -1336,18 +1414,16 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Check if file was uploaded
-		if (!req.file) {
-			return res.status(400).json({
-				success: false,
-				message: "Receipt file is required",
-			});
-		}
+		// No file upload required - PDF will be auto-generated
+		console.log("📄 Auto-generating PDF receipt for donation confirmation...");
+		console.log("🔍 Looking for donation with ID:", donationId);
 
 		// Find the donation and populate necessary fields
 		const donation = await Donation.findById(donationId)
 			.populate("donor", "email")
 			.populate("organization", "name email");
+
+		console.log("📋 Found donation:", donation ? "Yes" : "No");
 
 		if (!donation) {
 			return res.status(404).json({
@@ -1357,12 +1433,19 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		}
 
 		// Verify organization ownership
+		console.log("🏢 Checking organization ownership...");
+		console.log("🏢 Donation organization ID:", donation?.organization._id);
+		console.log("👤 Current user ID:", req.user._id);
+
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
 			userId: req.user._id, // Check if the current user owns this organization
 		});
 
+		console.log("🏢 Organization found:", organization ? "Yes" : "No");
+
 		if (!organization) {
+			console.log("❌ Permission denied - user doesn't own this organization");
 			return res.status(403).json({
 				success: false,
 				message: "You do not have permission to update this donation",
@@ -1370,15 +1453,20 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		}
 
 		// Check if the current status is RECEIVED
+		console.log("📊 Current donation status:", donation.status);
+		console.log("📊 Required status:", DonationStatus.RECEIVED);
+
 		if (donation.status !== DonationStatus.RECEIVED) {
+			console.log("❌ Status check failed - donation is not in RECEIVED status");
 			return res.status(400).json({
 				success: false,
 				message: "Only received donations can be marked as confirmed",
 			});
 		}
 
-		// Get the receipt file path
-		const receiptUrl = `/uploads/receipts/${req.file.filename}`;
+		console.log("✅ Status check passed - proceeding with confirmation");
+
+		// No receipt file needed - PDF will be auto-generated
 
 		// Generate PDF receipt for the donor
 		let pdfReceiptUrl = "";
@@ -1406,9 +1494,8 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			// Continue with the process even if PDF generation fails
 		}
 
-		// Update donation status and receipt
+		// Update donation status to confirmed
 		donation.status = DonationStatus.CONFIRMED;
-		donation.receiptImage = receiptUrl;
 		donation.confirmationDate = new Date();
 
 		// Store the PDF receipt URL if generated successfully
@@ -1416,14 +1503,12 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			donation.pdfReceiptUrl = pdfReceiptUrl;
 		}
 
-		// Store receipt metadata for better tracking
-		donation.receiptImageMetadata = {
-			originalName: req.file.originalname,
-			mimeType: req.file.mimetype,
-			fileSize: req.file.size,
-			uploadedAt: new Date(),
-			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
-		};
+		// Update receipt metadata for confirmation
+		if (!donation.receiptImageMetadata) {
+			donation.receiptImageMetadata = {};
+		}
+		donation.receiptImageMetadata.confirmedAt = new Date();
+		donation.receiptImageMetadata.confirmedBy = new mongoose.Types.ObjectId(req.user._id);
 
 		// Save the updated donation
 		await donation.save();
@@ -1488,10 +1573,9 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		res.status(200).json({
 			success: true,
 			data: donation,
-			message: "Donation marked as confirmed with receipt generated",
+			message: "Donation marked as confirmed with PDF receipt auto-generated",
 			emailStatus,
 			notificationStatus,
-			receiptUrl,
 			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {

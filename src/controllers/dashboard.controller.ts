@@ -277,18 +277,30 @@ export const getDonorDashboardStats = async (
 };
 
 export const getOrganizationDashboardStats = async (
-	req: Request,
+	req: AuthRequest,
 	res: Response
 ) => {
 	try {
-		const { organizationId } = req.params;
+		const authReq = req as AuthRequest;
+		const userId = authReq.user?._id;
 
-		if (!mongoose.Types.ObjectId.isValid(organizationId)) {
-			return res.status(400).json({
+		if (!userId) {
+			return res.status(401).json({
 				success: false,
-				error: "Invalid organization ID",
+				error: "Unauthorized",
 			});
 		}
+
+		// Get organization ID from the authenticated user
+		const organization = await Organization.findOne({ userId });
+		if (!organization) {
+			return res.status(404).json({
+				success: false,
+				error: "Organization not found",
+			});
+		}
+
+		const organizationId = organization._id;
 
 		// Get donation stats
 		const donationStats = await Donation.aggregate([
@@ -506,16 +518,26 @@ export const getOrganizationDashboardStats = async (
 			{
 				$group: {
 					_id: "$donor",
-					donorName: {
-						$concat: [
-							{ $ifNull: ["$donorInfo.firstName", ""] },
-							" ",
-							{ $ifNull: ["$donorInfo.lastName", ""] },
-						],
-					},
+					firstName: { $first: "$donorInfo.firstName" },
+					lastName: { $first: "$donorInfo.lastName" },
 					donorEmail: { $first: "$donorInfo.email" },
 					totalAmount: { $sum: "$amount" },
 					donationCount: { $sum: 1 },
+				},
+			},
+			{
+				$project: {
+					_id: 1,
+					donorName: {
+						$concat: [
+							{ $ifNull: ["$firstName", ""] },
+							" ",
+							{ $ifNull: ["$lastName", ""] },
+						],
+					},
+					donorEmail: 1,
+					totalAmount: 1,
+					donationCount: 1,
 				},
 			},
 			{
@@ -699,7 +721,7 @@ export const getOrganizationDashboardStats = async (
 						timestamp: donation.createdAt,
 						donorName: donation.donor
 							? `${donation.donor.firstName || ""} ${donation.donor.lastName || ""}`.trim() ||
-								"Anonymous"
+							"Anonymous"
 							: "Anonymous",
 						donorEmail: donation.donor?.email || "N/A",
 						donationType: donation.type,

@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as profileController from "../controllers/profile.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { isDonor, isOrganization } from "../middleware/role.middleware";
-import { uploadProfilePhoto } from "../middleware/upload.middleware";
+import { uploadProfilePhoto, uploadProfilePhotoToCloudinary } from "../middleware/upload.middleware";
 
 const router = Router();
 
@@ -14,15 +14,18 @@ router.post(
 	profileController.completeDonorProfile
 );
 router.get("/donor", authenticate, isDonor, profileController.getDonorProfile);
+router.put("/donor", authenticate, isDonor, profileController.updateDonorProfile);
 
-// Donor profile image upload
+// Donor profile image upload (using Cloudinary)
 router.post(
 	"/donor/avatar",
 	authenticate,
 	isDonor,
-	uploadProfilePhoto,
+	uploadProfilePhotoToCloudinary,
 	profileController.uploadDonorProfileImage
 );
+
+
 
 // Organization profile routes
 router.post(
@@ -36,6 +39,12 @@ router.get(
 	authenticate,
 	isOrganization,
 	profileController.getOrganizationProfile
+);
+router.put(
+	"/organization",
+	authenticate,
+	isOrganization,
+	profileController.updateOrganizationProfile
 );
 
 export default router;

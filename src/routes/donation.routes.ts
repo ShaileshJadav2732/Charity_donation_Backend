@@ -4,6 +4,7 @@ import {
 	confirmDonationReceipt,
 	createDonation,
 	findOrganizationPendingDonations,
+	getDonationById,
 	getDonorDonations,
 	getDonorStats,
 	getItemDonationAnalytics,
@@ -15,8 +16,8 @@ import {
 
 import { authorize } from "../middleware/role.middleware";
 import {
-	uploadDonationPhoto,
-	uploadReceipt,
+	uploadDonationPhotoToCloudinary,
+	uploadReceiptToCloudinary,
 } from "../middleware/upload.middleware";
 
 const router = express.Router();
@@ -39,9 +40,47 @@ router.post("/", createDonation);
 router.get(
 	"/",
 	authorize(["donor"]),
-
 	getDonorDonations
 );
+
+// Get a single donation by ID
+router.get("/:id", getDonationById);
+
+// Debug endpoint to check donation status
+router.get("/:id/debug", authenticate, async (req, res) => {
+	try {
+		const { id } = req.params;
+		const donation = await require("../models/donation.model").default.findById(id)
+			.populate("donor", "email")
+			.populate("organization", "name email");
+
+		if (!donation) {
+			return res.json({ error: "Donation not found" });
+		}
+
+		const organization = await require("../models/organization.model").default.findOne({
+			_id: donation.organization._id,
+			userId: req.user._id,
+		});
+
+		res.json({
+			donation: {
+				id: donation._id,
+				status: donation.status,
+				organizationId: donation.organization._id,
+				donorId: donation.donor._id,
+			},
+			user: {
+				id: req.user._id,
+				role: req.user.role,
+			},
+			organization: organization ? "Found" : "Not found",
+			canConfirm: donation.status === "RECEIVED" && !!organization,
+		});
+	} catch (error) {
+		res.json({ error: error.message });
+	}
+});
 
 // Get organization's pending donations
 router.get(
@@ -62,12 +101,12 @@ router.get("/items/:type/analytics", getItemDonationTypeAnalytics);
 // Update donation status
 router.patch("/:donationId/status", updateDonationStatus);
 
-// Mark donation as received with photo upload
+// Mark donation as received with photo upload (using Cloudinary)
 router.patch(
 	"/:donationId/received",
 	authenticate,
 	authorize(["organization"]),
-	uploadDonationPhoto,
+	uploadDonationPhotoToCloudinary,
 	markDonationAsReceived
 );
 
@@ -79,12 +118,21 @@ router.patch(
 	confirmDonationReceipt
 );
 
-// Mark donation as confirmed with receipt upload (for organizations)
+// Mark donation as confirmed with automatic PDF receipt generation (for organizations)
+router.patch(
+	"/:donationId/confirm-auto",
+	authenticate,
+	authorize(["organization"]),
+	markDonationAsConfirmed
+);
+
+// Legacy route for manual receipt upload (kept for backward compatibility)
+// This route still requires file upload middleware
 router.patch(
 	"/:donationId/confirmed",
 	authenticate,
 	authorize(["organization"]),
-	uploadReceipt,
+	uploadReceiptToCloudinary,
 	markDonationAsConfirmed
 );
 

@@ -11,6 +11,7 @@ import causeRoutes from "./routes/cause.routes";
 import campaignRoutes from "./routes/campaign.routes";
 
 import notificationRoutes from "./routes/notification.routes";
+import messageRoutes from "./routes/message.routes";
 
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
@@ -56,8 +57,12 @@ app.post(
 	express.raw({ type: "application/json" }),
 	handleStripeWebhook
 );
-// Body parsing middleware (MUST be before routes that need JSON parsing)
-app.use(express.json());
+
+// Handle message send route with multipart BEFORE JSON parsing
+app.use("/api/messages", messageRoutes);
+
+// Body parsing middleware (MUST be before other routes that need JSON parsing)
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 

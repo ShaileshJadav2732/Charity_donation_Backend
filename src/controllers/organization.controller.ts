@@ -13,6 +13,7 @@ import { DonationStatus, DonationType } from "../models/donation.model";
 // Helper function to format organization response
 const formatOrganizationResponse = (organization: any) => ({
 	id: organization._id.toString(),
+	userId: organization.userId.toString(), // Include User ID for messaging
 	name: organization.name,
 	description: organization.description,
 	phoneNumber: organization.phoneNumber,
@@ -117,25 +118,7 @@ export const getOrganizationByCauseId = catchAsync(
 		const organization = await Organization.findById(cause.organizationId);
 
 		if (!organization) {
-			// Instead of returning a 404 error, return a placeholder response
-			return res.status(200).json({
-				organization: {
-					id: cause.organizationId.toString(),
-					name: "Organization details unavailable",
-					description: "This organization's details are not available.",
-					phoneNumber: "Not available",
-					email: "Not available",
-					website: null,
-					address: null,
-					city: null,
-					state: null,
-					country: null,
-					logo: null,
-					verified: false,
-					createdAt: new Date().toISOString(),
-					updatedAt: new Date().toISOString(),
-				},
-			});
+			throw new AppError("Organization not found for this cause", 404);
 		}
 
 		res.status(200).json({
@@ -320,10 +303,10 @@ export const getOrganizationDonors = catchAsync(
 		);
 		const averageDonation =
 			totalFundsRaised /
-				donorsAggregation.reduce(
-					(sum, donor) => sum + donor.totalDonations,
-					0
-				) || 0;
+			donorsAggregation.reduce(
+				(sum, donor) => sum + donor.totalDonations,
+				0
+			) || 0;
 
 		res.status(200).json({
 			success: true,

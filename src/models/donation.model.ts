@@ -57,6 +57,10 @@ export interface IDonation extends Document {
 		fileSize?: number;
 		uploadedAt?: Date;
 		uploadedBy?: mongoose.Types.ObjectId;
+		cloudinaryPublicId?: string;
+		cloudinaryUrl?: string;
+		confirmedAt?: Date;
+		confirmedBy?: mongoose.Types.ObjectId;
 	};
 	pdfReceiptUrl?: string;
 	confirmationDate?: Date;
@@ -166,6 +170,13 @@ const DonationSchema: Schema = new Schema(
 			fileSize: Number,
 			uploadedAt: Date,
 			uploadedBy: {
+				type: Schema.Types.ObjectId,
+				ref: "User",
+			},
+			cloudinaryPublicId: String,
+			cloudinaryUrl: String,
+			confirmedAt: Date,
+			confirmedBy: {
 				type: Schema.Types.ObjectId,
 				ref: "User",
 			},

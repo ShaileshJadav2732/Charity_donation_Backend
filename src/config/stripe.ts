@@ -14,7 +14,7 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export const STRIPE_CONFIG = {
-	currency: "inr", // Changed from USD to INR to match frontend display
+	currency: "inr", // INR currency for Indian Rupee (₹)
 	automatic_payment_methods: {
 		enabled: true,
 	},

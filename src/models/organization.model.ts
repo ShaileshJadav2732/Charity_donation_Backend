@@ -68,6 +68,12 @@ const OrganizationSchema: Schema = new Schema(
 		logo: {
 			type: String,
 		},
+		coverImage: {
+			type: String,
+		},
+		coverImageCloudinaryId: {
+			type: String,
+		},
 		documents: [
 			{
 				type: String,

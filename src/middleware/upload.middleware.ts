@@ -2,6 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs-extra";
 import { Request, Response, NextFunction } from "express";
+import { uploadToCloudinary, uploadBufferToCloudinary } from "../config/cloudinary.config";
 
 // Ensure upload directories exist
 const donationPhotosDir = path.join(__dirname, "../../uploads/donation-photos");
@@ -437,4 +438,270 @@ export const uploadProfilePhoto = (
 
 		next();
 	});
+};
+
+// Cloudinary-based upload middleware for donation photos
+export const uploadDonationPhotoToCloudinary = async (
+	req: Request,
+	res: Response,
+	next: NextFunction
+) => {
+	try {
+		console.log("uploadDonationPhotoToCloudinary middleware called");
+
+		// Check if the request is multipart/form-data
+		if (
+			!req.headers["content-type"] ||
+			!req.headers["content-type"].includes("multipart/form-data")
+		) {
+			return res.status(400).json({
+				success: false,
+				message: "Request must be multipart/form-data",
+			});
+		}
+
+		// Use multer to handle the file upload to memory
+		const upload = multer({
+			storage: multer.memoryStorage(),
+			limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+			fileFilter: imageFileFilter,
+		}).single("photo");
+
+		upload(req, res, async (err) => {
+			if (err) {
+				console.error("Multer error:", err);
+				return res.status(400).json({
+					success: false,
+					message: err.message || "File upload error",
+				});
+			}
+
+			if (!req.file) {
+				return res.status(400).json({
+					success: false,
+					message: "No photo file provided",
+				});
+			}
+
+			try {
+				// Create a temporary file for Cloudinary upload using OS temp directory
+				const os = require('os');
+				const tempDir = os.tmpdir();
+				const tempFilePath = path.join(tempDir, `donation-photo-${Date.now()}-${req.file.originalname}`);
+				fs.writeFileSync(tempFilePath, req.file.buffer);
+
+				// Create a file object that matches Express.Multer.File interface
+				const fileForCloudinary = {
+					...req.file,
+					path: tempFilePath,
+				} as Express.Multer.File;
+
+				// Upload to Cloudinary
+				const cloudinaryResult = await uploadToCloudinary(
+					fileForCloudinary,
+					"donation-photos"
+				);
+
+				// Clean up temp file
+				if (fs.existsSync(tempFilePath)) {
+					fs.unlinkSync(tempFilePath);
+				}
+
+				// Add Cloudinary result to request object
+				(req as any).cloudinaryResult = cloudinaryResult;
+
+				console.log("✅ Photo uploaded to Cloudinary:", cloudinaryResult.url);
+				next();
+			} catch (cloudinaryError) {
+				console.error("Cloudinary upload error:", cloudinaryError);
+				return res.status(500).json({
+					success: false,
+					message: "Failed to upload photo to cloud storage",
+					error: cloudinaryError,
+				});
+			}
+		});
+	} catch (error) {
+		console.error("Upload middleware error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Upload middleware error",
+			error,
+		});
+	}
+};
+
+
+
+// Cloudinary-based upload middleware for profile photos
+export const uploadProfilePhotoToCloudinary = async (
+	req: Request,
+	res: Response,
+	next: NextFunction
+) => {
+	try {
+		console.log("uploadProfilePhotoToCloudinary middleware called");
+
+		// Check if the request is multipart/form-data
+		if (
+			!req.headers["content-type"] ||
+			!req.headers["content-type"].includes("multipart/form-data")
+		) {
+			return res.status(400).json({
+				success: false,
+				message: "Request must be multipart/form-data",
+			});
+		}
+
+		// Use multer to handle the file upload to memory
+		const upload = multer({
+			storage: multer.memoryStorage(),
+			limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+			fileFilter: imageFileFilter,
+		}).single("profileImage");
+
+		upload(req, res, async (err) => {
+			if (err) {
+				console.error("Multer error:", err);
+				return res.status(400).json({
+					success: false,
+					message: err.message || "File upload error",
+				});
+			}
+
+			if (!req.file) {
+				return res.status(400).json({
+					success: false,
+					message: "No profile image file provided",
+				});
+			}
+
+			try {
+				// Upload to Cloudinary
+				const result = await uploadBufferToCloudinary(
+					req.file.buffer,
+					"profile-photos",
+					{
+						width: 400,
+						height: 400,
+						crop: "fill",
+						gravity: "face",
+						quality: "auto",
+						format: "jpg",
+					}
+				);
+
+				console.log("✅ Profile photo uploaded to Cloudinary:", result.secure_url);
+
+				// Add Cloudinary URL to request for controller to use
+				req.cloudinaryUrl = result.secure_url;
+				req.cloudinaryPublicId = result.public_id;
+
+				next();
+			} catch (uploadError) {
+				console.error("❌ Cloudinary upload error:", uploadError);
+				return res.status(500).json({
+					success: false,
+					message: "Failed to upload profile photo to cloud storage",
+				});
+			}
+		});
+	} catch (error) {
+		console.error("❌ Profile photo upload middleware error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Internal server error during profile photo upload",
+		});
+	}
+};
+
+// Cloudinary-based upload middleware for receipts
+export const uploadReceiptToCloudinary = async (
+	req: Request,
+	res: Response,
+	next: NextFunction
+) => {
+	try {
+		console.log("uploadReceiptToCloudinary middleware called");
+
+		// Check if the request is multipart/form-data
+		if (
+			!req.headers["content-type"] ||
+			!req.headers["content-type"].includes("multipart/form-data")
+		) {
+			return res.status(400).json({
+				success: false,
+				message: "Request must be multipart/form-data",
+			});
+		}
+
+		// Use multer to handle the file upload to memory
+		const upload = multer({
+			storage: multer.memoryStorage(),
+			limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+			fileFilter: receiptFileFilter,
+		}).single("receipt");
+
+		upload(req, res, async (err) => {
+			if (err) {
+				console.error("Multer error:", err);
+				return res.status(400).json({
+					success: false,
+					message: err.message || "File upload error",
+				});
+			}
+
+			if (!req.file) {
+				return res.status(400).json({
+					success: false,
+					message: "No receipt file provided",
+				});
+			}
+
+			try {
+				// Create a temporary file for Cloudinary upload using OS temp directory
+				const os = require('os');
+				const tempDir = os.tmpdir();
+				const tempFilePath = path.join(tempDir, `receipt-${Date.now()}-${req.file.originalname}`);
+				fs.writeFileSync(tempFilePath, req.file.buffer);
+
+				// Create a file object that matches Express.Multer.File interface
+				const fileForCloudinary = {
+					...req.file,
+					path: tempFilePath,
+				} as Express.Multer.File;
+
+				// Upload to Cloudinary (receipts can be images or PDFs)
+				const cloudinaryResult = await uploadToCloudinary(
+					fileForCloudinary,
+					"receipts"
+				);
+
+				// Clean up temp file
+				if (fs.existsSync(tempFilePath)) {
+					fs.unlinkSync(tempFilePath);
+				}
+
+				// Add Cloudinary result to request object
+				(req as any).cloudinaryResult = cloudinaryResult;
+
+				console.log("✅ Receipt uploaded to Cloudinary:", cloudinaryResult.url);
+				next();
+			} catch (cloudinaryError) {
+				console.error("Cloudinary upload error:", cloudinaryError);
+				return res.status(500).json({
+					success: false,
+					message: "Failed to upload receipt to cloud storage",
+					error: cloudinaryError,
+				});
+			}
+		});
+	} catch (error) {
+		console.error("Upload middleware error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Upload middleware error",
+			error,
+		});
+	}
 };
