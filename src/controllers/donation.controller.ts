@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Cause from "../models/cause.model";
 import Donation, {
 	DonationStatus,
 	DonationType,
@@ -10,11 +9,38 @@ import { sendEmail } from "../utils/email";
 import { generateDonationReceipt } from "../utils/pdfGenerator";
 import { IUser } from "../types";
 
+// Helper to send notifications
+const sendNotification = async (
+	req: any,
+	userId: string,
+	type: string,
+	data: any
+) => {
+	try {
+		if (req.notificationService) {
+			if (type === "received") {
+				await req.notificationService.createDonationReceivedNotification(
+					userId,
+					data
+				);
+			} else {
+				await req.notificationService.createDonationStatusNotification(
+					userId,
+					data
+				);
+			}
+			return "Real-time notification created successfully";
+		}
+	} catch {
+		return "Failed to create real-time notification";
+	}
+	return "No notification created";
+};
+
 export const createDonation = async (req: Request, res: Response) => {
 	try {
-		if (!req.user?._id) {
+		if (!req.user?._id)
 			return res.status(401).json({ message: "User not authenticated" });
-		}
 
 		const {
 			organization,
@@ -35,19 +61,15 @@ export const createDonation = async (req: Request, res: Response) => {
 			notes,
 		} = req.body;
 
-		// Validate that the organization exists and get the organization document
 		const organizationDoc = await Organization.findById(organization);
-		if (!organizationDoc) {
-			return res.status(400).json({
-				success: false,
-				message: "Organization not found",
-			});
-		}
+		if (!organizationDoc)
+			return res
+				.status(400)
+				.json({ success: false, message: "Organization not found" });
 
-		// Create new donation
-		const donation = new Donation({
+		const donation = await new Donation({
 			donor: req.user._id,
-			organization: organizationDoc._id, // Use the Organization document ID
+			organization: organizationDoc._id,
 			campaign,
 			cause,
 			type,
@@ -60,50 +82,40 @@ export const createDonation = async (req: Request, res: Response) => {
 			scheduledTime: type !== DonationType.MONEY ? scheduledTime : undefined,
 			pickupAddress: type !== DonationType.MONEY ? pickupAddress : undefined,
 			dropoffAddress: type !== DonationType.MONEY ? dropoffAddress : undefined,
-			isPickup: type === DonationType.MONEY ? false : Boolean(isPickup), // Always provide boolean
+			isPickup: type === DonationType.MONEY ? false : Boolean(isPickup),
 			contactPhone,
 			contactEmail,
 			notes,
-		});
+		}).save();
 
-		await donation.save();
-
-		// Populate the donation with organization and donor details for notification
 		const populatedDonation = await Donation.findById(donation._id)
 			.populate<{ donor: IUser }>("donor", "name email")
 			.populate("organization", "_id name email")
 			.populate("cause", "title");
 
-		// Send real-time notification to organization about new donation
+		// Send notifications
 		let orgNotificationStatus = "No notification created";
-		if (populatedDonation?.organization && (req as any).notificationService) {
-			try {
-				// Find the organization document to get the userId
-				const orgDoc = await Organization.findById(
-					populatedDonation.organization._id
+		if (populatedDonation?.organization) {
+			const orgDoc = await Organization.findById(
+				populatedDonation.organization._id
+			);
+			if (orgDoc?.userId) {
+				orgNotificationStatus = await sendNotification(
+					req as any,
+					orgDoc.userId.toString(),
+					"received",
+					{
+						donorName: populatedDonation.donor?.name || "Anonymous Donor",
+						amount: type === DonationType.MONEY ? amount || 0 : 0,
+						cause:
+							(populatedDonation.cause as any)?.title || "your organization",
+						donationId: donation._id.toString(),
+					}
 				);
-
-				if (orgDoc?.userId) {
-					await (
-						req as any
-					).notificationService.createDonationReceivedNotification(
-						orgDoc.userId.toString(),
-						{
-							donorName: populatedDonation.donor?.name || "Anonymous Donor",
-							amount: type === DonationType.MONEY ? amount || 0 : 0,
-							cause:
-								(populatedDonation.cause as any)?.title || "your organization",
-							donationId: donation._id.toString(),
-						}
-					);
-					orgNotificationStatus = "Real-time notification created successfully";
-				}
-			} catch (notificationError) {
-				orgNotificationStatus = "Failed to create real-time notification";
 			}
 		}
 
-		// Send email notification to organization
+		// Send email
 		let orgEmailStatus = "No email sent";
 		const organizationData = populatedDonation?.organization as any;
 		if (organizationData?.email) {
@@ -117,7 +129,7 @@ export const createDonation = async (req: Request, res: Response) => {
 					unit
 				);
 				orgEmailStatus = "Email sent successfully to organization";
-			} catch (emailError) {
+			} catch {
 				orgEmailStatus = "Failed to send email to organization";
 			}
 		}
@@ -139,9 +151,8 @@ export const createDonation = async (req: Request, res: Response) => {
 
 export const getDonorDonations = async (req: Request, res: Response) => {
 	try {
-		if (!req.user?._id) {
+		if (!req.user?._id)
 			return res.status(401).json({ message: "User not authenticated" });
-		}
 
 		const { status, type, page = 1, limit = 10 } = req.query;
 		const query: any = { donor: req.user._id };
@@ -149,28 +160,16 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 		if (status) query.status = status;
 		if (type) query.type = type;
 
-		const donations = await Donation.find(query)
-			.populate("organization", "name email phone")
-			.populate("cause", "title")
-			.select("+receiptImage +pdfReceiptUrl +receiptImageMetadata") // Explicitly include receipt fields
-			.sort({ createdAt: -1 })
-			.skip((Number(page) - 1) * Number(limit))
-			.limit(Number(limit));
-
-		const total = await Donation.countDocuments(query);
-
-		// Debug logging for receipt images
-		console.log(
-			"📋 Donations with receipt info:",
-			donations.map((d) => ({
-				id: d._id,
-				status: d.status,
-				receiptImage: d.receiptImage,
-				pdfReceiptUrl: d.pdfReceiptUrl,
-				hasReceiptImage: !!d.receiptImage,
-				hasPdfReceipt: !!d.pdfReceiptUrl,
-			}))
-		);
+		const [donations, total] = await Promise.all([
+			Donation.find(query)
+				.populate("organization", "name email phone")
+				.populate("cause", "title")
+				.select("+receiptImage +pdfReceiptUrl +receiptImageMetadata")
+				.sort({ createdAt: -1 })
+				.skip((Number(page) - 1) * Number(limit))
+				.limit(Number(limit)),
+			Donation.countDocuments(query),
+		]);
 
 		res.status(200).json({
 			success: true,
@@ -190,16 +189,13 @@ export const getDonorDonations = async (req: Request, res: Response) => {
 	}
 };
 
-// Get a single donation by ID with full details
 export const getDonationById = async (req: Request, res: Response) => {
 	try {
 		const { id } = req.params;
-
 		if (!mongoose.Types.ObjectId.isValid(id)) {
-			return res.status(400).json({
-				success: false,
-				message: "Invalid donation ID",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Invalid donation ID" });
 		}
 
 		const donation = await Donation.findById(id)
@@ -209,22 +205,16 @@ export const getDonationById = async (req: Request, res: Response) => {
 			.populate("campaign", "title")
 			.select("+receiptImage +pdfReceiptUrl +receiptImageMetadata");
 
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				message: "Donation not found",
-			});
-		}
+		if (!donation)
+			return res
+				.status(404)
+				.json({ success: false, message: "Donation not found" });
 
-		// Check if user has permission to view this donation
+		// Check permissions
 		if (req.user?._id) {
 			const userId = req.user._id.toString();
-			const donorId = donation.donor._id.toString();
+			const isDonor = userId === donation.donor._id.toString();
 
-			// Check if user is the donor
-			const isDonor = userId === donorId;
-
-			// Check if user is from the organization
 			let isOrganization = false;
 			if (req.user.role === "organization") {
 				const organization = await Organization.findOne({
@@ -245,10 +235,7 @@ export const getDonationById = async (req: Request, res: Response) => {
 			}
 		}
 
-		res.status(200).json({
-			success: true,
-			data: donation,
-		});
+		res.status(200).json({ success: true, data: donation });
 	} catch (error: any) {
 		res.status(500).json({
 			success: false,
@@ -260,126 +247,83 @@ export const getDonationById = async (req: Request, res: Response) => {
 
 export const getDonorStats = async (req: Request, res: Response) => {
 	try {
-		// Get user ID if authenticated
 		const userId = req.user?._id;
-
-		// Create base match condition for confirmed/received donations
 		const baseMatchCondition: any = {
 			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
 		};
+		if (userId) baseMatchCondition.donor = userId;
 
-		// If user is authenticated, filter by their donations
-		if (userId) {
-			baseMatchCondition.donor = userId;
-		}
-
-		// Match condition for monetary donations
 		const moneyMatchCondition = {
 			...baseMatchCondition,
 			type: DonationType.MONEY,
 		};
-
-		// Get monetary donation statistics
-		const moneyDonationStats = await Donation.aggregate([
-			{
-				$match: moneyMatchCondition,
-			},
-			{
-				$group: {
-					_id: null,
-					totalDonated: { $sum: "$amount" },
-					averageDonation: { $avg: "$amount" },
-					donationCount: { $sum: 1 },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					totalDonated: 1,
-					averageDonation: { $round: ["$averageDonation", 2] },
-					donationCount: 1,
-				},
-			},
-		]);
-
-		// Get count of unique causes supported (for all donation types)
-		const causesSupported = await Donation.aggregate([
-			{
-				$match: baseMatchCondition,
-			},
-			{
-				$group: {
-					_id: "$cause",
-				},
-			},
-			{
-				$group: {
-					_id: null,
-					totalCauses: { $sum: 1 },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					totalCauses: 1,
-				},
-			},
-		]);
-
-		// Get item donation statistics
 		const itemMatchCondition = {
 			...baseMatchCondition,
 			type: { $ne: DonationType.MONEY },
 		};
 
-		const itemDonationStats = await Donation.aggregate([
-			{
-				$match: itemMatchCondition,
-			},
-			{
-				$group: {
-					_id: "$type",
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
+		const [
+			moneyDonationStats,
+			causesSupported,
+			itemDonationStats,
+			totalItemDonations,
+		] = await Promise.all([
+			Donation.aggregate([
+				{ $match: moneyMatchCondition },
+				{
+					$group: {
+						_id: null,
+						totalDonated: { $sum: "$amount" },
+						averageDonation: { $avg: "$amount" },
+						donationCount: { $sum: 1 },
+					},
 				},
-			},
-			{
-				$project: {
-					_id: 0,
-					type: "$_id",
-					count: 1,
-					totalQuantity: 1,
+				{
+					$project: {
+						_id: 0,
+						totalDonated: 1,
+						averageDonation: { $round: ["$averageDonation", 2] },
+						donationCount: 1,
+					},
 				},
-			},
+			]),
+			Donation.aggregate([
+				{ $match: baseMatchCondition },
+				{ $group: { _id: "$cause" } },
+				{ $group: { _id: null, totalCauses: { $sum: 1 } } },
+				{ $project: { _id: 0, totalCauses: 1 } },
+			]),
+			Donation.aggregate([
+				{ $match: itemMatchCondition },
+				{
+					$group: {
+						_id: "$type",
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+					},
+				},
+				{ $project: { _id: 0, type: "$_id", count: 1, totalQuantity: 1 } },
+			]),
+			Donation.countDocuments(itemMatchCondition),
 		]);
-
-		// Get total item donations count
-		const totalItemDonations =
-			await Donation.countDocuments(itemMatchCondition);
-
-		// Combine the results
-		const response = {
-			monetary: {
-				totalDonated: moneyDonationStats[0]?.totalDonated || 0,
-				averageDonation: moneyDonationStats[0]?.averageDonation || 0,
-				donationCount: moneyDonationStats[0]?.donationCount || 0,
-			},
-			items: {
-				totalDonations: totalItemDonations,
-				byType: itemDonationStats,
-			},
-			totalCauses: causesSupported[0]?.totalCauses || 0,
-		};
 
 		res.status(200).json({
 			success: true,
-			data: response,
+			data: {
+				monetary: {
+					totalDonated: moneyDonationStats[0]?.totalDonated || 0,
+					averageDonation: moneyDonationStats[0]?.averageDonation || 0,
+					donationCount: moneyDonationStats[0]?.donationCount || 0,
+				},
+				items: {
+					totalDonations: totalItemDonations,
+					byType: itemDonationStats,
+				},
+				totalCauses: causesSupported[0]?.totalCauses || 0,
+			},
 		});
 	} catch (error) {
-		res.status(500).json({
-			success: false,
-			message: "Something went wrong",
-		});
+		res.status(500).json({ success: false, message: "Something went wrong" });
 	}
 };
 
@@ -389,357 +333,267 @@ export const getItemDonationTypeAnalytics = async (
 ) => {
 	try {
 		const { type } = req.params;
-
-		// Validate donation type
 		if (!type || !Object.values(DonationType).includes(type as DonationType)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid donation type is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid donation type is required" });
 		}
 
-		// Get user ID and role if authenticated
 		const userId = req.user?._id;
 		const userRole = req.user?.role;
-
-		// Create match condition for confirmed/received donations of the specified type
 		const matchCondition: any = {
 			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
 			type: type,
 		};
 
-		// Filter based on user role
 		if (userId) {
 			if (userRole === "donor") {
-				// For donors, show only their donations
 				matchCondition.donor = userId;
 			} else if (userRole === "organization") {
-				// For organizations, find their organization document and filter by it
 				const organizationDoc = await Organization.findOne({ userId: userId });
-				if (organizationDoc) {
-					matchCondition.organization = organizationDoc._id;
-				} else {
-					// If no organization found, return empty results
-					matchCondition.organization = new mongoose.Types.ObjectId();
-				}
+				matchCondition.organization =
+					organizationDoc?._id || new mongoose.Types.ObjectId();
 			}
-			// For admin or other roles, show all donations (no additional filter)
 		}
 
-		// Get detailed donation information
-		const donations = await Donation.find(matchCondition)
-			.populate("cause", "title")
-			.populate("organization", "name")
-			.sort({ createdAt: -1 })
-			.limit(20)
-			.lean(); // Use lean() to get plain JavaScript objects
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
 
-		// Get statistics for this donation type
-		const stats = await Donation.aggregate([
-			{
-				$match: matchCondition,
-			},
-			{
-				$group: {
-					_id: null,
-					totalDonations: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
-					avgQuantity: { $avg: "$quantity" },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					totalDonations: 1,
-					totalQuantity: 1,
-					avgQuantity: { $round: ["$avgQuantity", 2] },
-				},
-			},
-		]);
-
-		// Get monthly trend
-		const today = new Date();
-		const sixMonthsAgo = new Date(today);
-		sixMonthsAgo.setMonth(today.getMonth() - 5);
-
-		const monthlyTrend = await Donation.aggregate([
-			{
-				$match: {
-					...matchCondition,
-					createdAt: { $gte: sixMonthsAgo },
-				},
-			},
-			{
-				$group: {
-					_id: {
-						year: { $year: "$createdAt" },
-						month: { $month: "$createdAt" },
+		const [donations, stats, monthlyTrend, topCauses] = await Promise.all([
+			Donation.find(matchCondition)
+				.populate("cause", "title")
+				.populate("organization", "name")
+				.sort({ createdAt: -1 })
+				.limit(20)
+				.lean(),
+			Donation.aggregate([
+				{ $match: matchCondition },
+				{
+					$group: {
+						_id: null,
+						totalDonations: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+						avgQuantity: { $avg: "$quantity" },
 					},
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
 				},
-			},
-			{
-				$project: {
-					_id: 0,
-					year: "$_id.year",
-					month: "$_id.month",
-					count: 1,
-					totalQuantity: 1,
+				{
+					$project: {
+						_id: 0,
+						totalDonations: 1,
+						totalQuantity: 1,
+						avgQuantity: { $round: ["$avgQuantity", 2] },
+					},
 				},
-			},
-			{
-				$sort: { year: 1, month: 1 },
-			},
+			]),
+			Donation.aggregate([
+				{ $match: { ...matchCondition, createdAt: { $gte: sixMonthsAgo } } },
+				{
+					$group: {
+						_id: {
+							year: { $year: "$createdAt" },
+							month: { $month: "$createdAt" },
+						},
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+					},
+				},
+				{
+					$project: {
+						_id: 0,
+						year: "$_id.year",
+						month: "$_id.month",
+						count: 1,
+						totalQuantity: 1,
+					},
+				},
+				{ $sort: { year: 1, month: 1 } },
+			]),
+			Donation.aggregate([
+				{ $match: matchCondition },
+				{
+					$lookup: {
+						from: "causes",
+						localField: "cause",
+						foreignField: "_id",
+						as: "causeInfo",
+					},
+				},
+				{ $unwind: "$causeInfo" },
+				{
+					$group: {
+						_id: "$cause",
+						causeName: { $first: "$causeInfo.title" },
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+					},
+				},
+				{
+					$project: {
+						_id: 0,
+						causeId: "$_id",
+						causeName: 1,
+						count: 1,
+						totalQuantity: 1,
+					},
+				},
+				{ $sort: { count: -1 } },
+				{ $limit: 5 },
+			]),
 		]);
-
-		// Get top causes for this donation type
-		const topCauses = await Donation.aggregate([
-			{
-				$match: matchCondition,
-			},
-			{
-				$lookup: {
-					from: "causes",
-					localField: "cause",
-					foreignField: "_id",
-					as: "causeInfo",
-				},
-			},
-			{
-				$unwind: "$causeInfo",
-			},
-			{
-				$group: {
-					_id: "$cause",
-					causeName: { $first: "$causeInfo.title" },
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					causeId: "$_id",
-					causeName: 1,
-					count: 1,
-					totalQuantity: 1,
-				},
-			},
-			{
-				$sort: { count: -1 },
-			},
-			{
-				$limit: 5,
-			},
-		]);
-
-		// Combine the results
-		const response = {
-			type,
-			stats: stats[0] || {
-				totalDonations: 0,
-				totalQuantity: 0,
-				avgQuantity: 0,
-			},
-			recentDonations: donations.map((d) => ({
-				id: d._id,
-				description: d.description,
-				quantity: d.quantity,
-				unit: d.unit,
-				cause: d.cause
-					? {
-							id: (d.cause as any)._id,
-							title: (d.cause as any).title,
-						}
-					: null,
-				organization: d.organization
-					? {
-							id: (d.organization as any)._id,
-							name: (d.organization as any).name,
-						}
-					: null,
-				createdAt: d.createdAt,
-			})),
-			monthlyTrend,
-			topCauses,
-		};
 
 		res.status(200).json({
 			success: true,
-			data: response,
+			data: {
+				type,
+				stats: stats[0] || {
+					totalDonations: 0,
+					totalQuantity: 0,
+					avgQuantity: 0,
+				},
+				recentDonations: donations.map((d) => ({
+					id: d._id,
+					description: d.description,
+					quantity: d.quantity,
+					unit: d.unit,
+					cause: d.cause
+						? { id: (d.cause as any)._id, title: (d.cause as any).title }
+						: null,
+					organization: d.organization
+						? {
+								id: (d.organization as any)._id,
+								name: (d.organization as any).name,
+							}
+						: null,
+					createdAt: d.createdAt,
+				})),
+				monthlyTrend,
+				topCauses,
+			},
 		});
 	} catch (error) {
-		res.status(500).json({
-			success: false,
-			message: "Something went wrong",
-		});
+		res.status(500).json({ success: false, message: "Something went wrong" });
 	}
 };
 
 export const getItemDonationAnalytics = async (req: Request, res: Response) => {
 	try {
-		// Get user ID and role if authenticated
 		const userId = req.user?._id;
 		const userRole = req.user?.role;
-
-		// Create base match condition for confirmed/received item donations
 		const matchCondition: any = {
 			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
 			type: { $ne: DonationType.MONEY },
 		};
 
-		// Filter based on user role
 		if (userId) {
 			if (userRole === "donor") {
-				// For donors, show only their donations
 				matchCondition.donor = userId;
 			} else if (userRole === "organization") {
-				// For organizations, find their organization document and filter by it
 				const organizationDoc = await Organization.findOne({ userId: userId });
-				if (organizationDoc) {
-					matchCondition.organization = organizationDoc._id;
-				} else {
-					// If no organization found, return empty results
-					matchCondition.organization = new mongoose.Types.ObjectId();
-				}
+				matchCondition.organization =
+					organizationDoc?._id || new mongoose.Types.ObjectId();
 			}
-			// For admin or other roles, show all donations (no additional filter)
 		}
 
-		// Get item donation statistics by type
-		const donationsByType = await Donation.aggregate([
-			{
-				$match: matchCondition,
-			},
-			{
-				$group: {
-					_id: "$type",
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
-					items: {
-						$push: {
-							id: "$_id",
-							description: "$description",
-							quantity: "$quantity",
-							unit: "$unit",
-							status: "$status",
-							createdAt: "$createdAt",
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+
+		const [donationsByType, monthlyTrend, topCauses] = await Promise.all([
+			Donation.aggregate([
+				{ $match: matchCondition },
+				{
+					$group: {
+						_id: "$type",
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+						items: {
+							$push: {
+								id: "$_id",
+								description: "$description",
+								quantity: "$quantity",
+								unit: "$unit",
+								status: "$status",
+								createdAt: "$createdAt",
+							},
 						},
 					},
 				},
-			},
-			{
-				$project: {
-					_id: 0,
-					type: "$_id",
-					count: 1,
-					totalQuantity: 1,
-					items: { $slice: ["$items", 5] }, // Limit to 5 most recent items per type
-				},
-			},
-			{
-				$sort: { count: -1 },
-			},
-		]);
-
-		// Get monthly trend of item donations
-		const today = new Date();
-		const sixMonthsAgo = new Date(today);
-		sixMonthsAgo.setMonth(today.getMonth() - 5);
-
-		const monthlyTrend = await Donation.aggregate([
-			{
-				$match: {
-					...matchCondition,
-					createdAt: { $gte: sixMonthsAgo },
-				},
-			},
-			{
-				$group: {
-					_id: {
-						year: { $year: "$createdAt" },
-						month: { $month: "$createdAt" },
-						type: "$type",
+				{
+					$project: {
+						_id: 0,
+						type: "$_id",
+						count: 1,
+						totalQuantity: 1,
+						items: { $slice: ["$items", 5] },
 					},
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
 				},
-			},
-			{
-				$project: {
-					_id: 0,
-					year: "$_id.year",
-					month: "$_id.month",
-					type: "$_id.type",
-					count: 1,
-					totalQuantity: 1,
+				{ $sort: { count: -1 } },
+			]),
+			Donation.aggregate([
+				{ $match: { ...matchCondition, createdAt: { $gte: sixMonthsAgo } } },
+				{
+					$group: {
+						_id: {
+							year: { $year: "$createdAt" },
+							month: { $month: "$createdAt" },
+							type: "$type",
+						},
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+					},
 				},
-			},
-			{
-				$sort: { year: 1, month: 1, type: 1 },
-			},
+				{
+					$project: {
+						_id: 0,
+						year: "$_id.year",
+						month: "$_id.month",
+						type: "$_id.type",
+						count: 1,
+						totalQuantity: 1,
+					},
+				},
+				{ $sort: { year: 1, month: 1, type: 1 } },
+			]),
+			Donation.aggregate([
+				{ $match: matchCondition },
+				{
+					$lookup: {
+						from: "causes",
+						localField: "cause",
+						foreignField: "_id",
+						as: "causeInfo",
+					},
+				},
+				{ $unwind: "$causeInfo" },
+				{
+					$group: {
+						_id: "$cause",
+						causeName: { $first: "$causeInfo.title" },
+						count: { $sum: 1 },
+						totalQuantity: { $sum: "$quantity" },
+						types: { $addToSet: "$type" },
+					},
+				},
+				{
+					$project: {
+						_id: 0,
+						causeId: "$_id",
+						causeName: 1,
+						count: 1,
+						totalQuantity: 1,
+						types: 1,
+					},
+				},
+				{ $sort: { count: -1 } },
+				{ $limit: 5 },
+			]),
 		]);
-
-		// Get top causes receiving item donations
-		const topCauses = await Donation.aggregate([
-			{
-				$match: matchCondition,
-			},
-			{
-				$lookup: {
-					from: "causes",
-					localField: "cause",
-					foreignField: "_id",
-					as: "causeInfo",
-				},
-			},
-			{
-				$unwind: "$causeInfo",
-			},
-			{
-				$group: {
-					_id: "$cause",
-					causeName: { $first: "$causeInfo.title" },
-					count: { $sum: 1 },
-					totalQuantity: { $sum: "$quantity" },
-					types: { $addToSet: "$type" },
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					causeId: "$_id",
-					causeName: 1,
-					count: 1,
-					totalQuantity: 1,
-					types: 1,
-				},
-			},
-			{
-				$sort: { count: -1 },
-			},
-			{
-				$limit: 5,
-			},
-		]);
-
-		// Combine the results
-		const response = {
-			donationsByType,
-			monthlyTrend,
-			topCauses,
-		};
 
 		res.status(200).json({
 			success: true,
-			data: response,
+			data: { donationsByType, monthlyTrend, topCauses },
 		});
 	} catch (error) {
-		res.status(500).json({
-			success: false,
-			message: "Something went wrong",
-		});
+		res.status(500).json({ success: false, message: "Something went wrong" });
 	}
 };
 
@@ -748,122 +602,88 @@ export const findOrganizationPendingDonations = async (
 	res: Response
 ) => {
 	try {
-		// Get organization ID from request params
 		const { organizationId } = req.params;
+		if (!organizationId)
+			return res
+				.status(400)
+				.json({ success: false, message: "Organization ID is required" });
 
-		// Verify the organization ID is valid
-		if (!organizationId) {
-			return res.status(400).json({
-				success: false,
-				message: "Organization ID is required",
-			});
-		}
-
-		// Parse query parameters
 		const status = (req.query.status as string)?.toUpperCase() || "PENDING";
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 10;
 
-		// Use aggregation pipeline to properly join donor information
-		const donationsAggregation = await Donation.aggregate([
-			{
-				$match: {
-					organization: new mongoose.Types.ObjectId(organizationId),
-					status: status,
-				},
-			},
-			{
-				$lookup: {
-					from: "users",
-					localField: "donor",
-					foreignField: "_id",
-					as: "donorUser",
-				},
-			},
-			{
-				$lookup: {
-					from: "donorprofiles",
-					localField: "donor",
-					foreignField: "userId",
-					as: "donorProfile",
-				},
-			},
-			{
-				$lookup: {
-					from: "causes",
-					localField: "cause",
-					foreignField: "_id",
-					as: "causeInfo",
-				},
-			},
-			{
-				$unwind: {
-					path: "$donorUser",
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$unwind: {
-					path: "$donorProfile",
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$unwind: {
-					path: "$causeInfo",
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$addFields: {
-					"donor.name": {
-						$cond: {
-							if: {
-								$and: ["$donorProfile.firstName", "$donorProfile.lastName"],
-							},
-							then: {
-								$concat: [
-									"$donorProfile.firstName",
-									" ",
-									"$donorProfile.lastName",
-								],
-							},
-							else: "$donorUser.email",
-						},
+		const [donationsAggregation, total] = await Promise.all([
+			Donation.aggregate([
+				{
+					$match: {
+						organization: new mongoose.Types.ObjectId(organizationId),
+						status: status,
 					},
-					"donor.email": "$donorUser.email",
-					"donor.phone": "$donorProfile.phoneNumber",
-					"donor._id": "$donorUser._id",
-					"cause.title": "$causeInfo.title",
-					"cause._id": "$causeInfo._id",
 				},
-			},
-			{
-				$sort: { createdAt: -1 },
-			},
-			{
-				$skip: (page - 1) * limit,
-			},
-			{
-				$limit: limit,
-			},
+				{
+					$lookup: {
+						from: "users",
+						localField: "donor",
+						foreignField: "_id",
+						as: "donorUser",
+					},
+				},
+				{
+					$lookup: {
+						from: "donorprofiles",
+						localField: "donor",
+						foreignField: "userId",
+						as: "donorProfile",
+					},
+				},
+				{
+					$lookup: {
+						from: "causes",
+						localField: "cause",
+						foreignField: "_id",
+						as: "causeInfo",
+					},
+				},
+				{ $unwind: { path: "$donorUser", preserveNullAndEmptyArrays: true } },
+				{
+					$unwind: { path: "$donorProfile", preserveNullAndEmptyArrays: true },
+				},
+				{ $unwind: { path: "$causeInfo", preserveNullAndEmptyArrays: true } },
+				{
+					$addFields: {
+						"donor.name": {
+							$cond: {
+								if: {
+									$and: ["$donorProfile.firstName", "$donorProfile.lastName"],
+								},
+								then: {
+									$concat: [
+										"$donorProfile.firstName",
+										" ",
+										"$donorProfile.lastName",
+									],
+								},
+								else: "$donorUser.email",
+							},
+						},
+						"donor.email": "$donorUser.email",
+						"donor.phone": "$donorProfile.phoneNumber",
+						"donor._id": "$donorUser._id",
+						"cause.title": "$causeInfo.title",
+						"cause._id": "$causeInfo._id",
+					},
+				},
+				{ $sort: { createdAt: -1 } },
+				{ $skip: (page - 1) * limit },
+				{ $limit: limit },
+			]),
+			Donation.countDocuments({ organization: organizationId, status: status }),
 		]);
 
-		// Get total count for pagination
-		const total = await Donation.countDocuments({
-			organization: organizationId,
-			status: status,
-		});
-
-		// Return the results
 		res.status(200).json({
 			success: true,
 			data: donationsAggregation,
-			pagination: {
-				total,
-				page,
-				pages: Math.ceil(total / limit),
-			},
+			pagination: { total, page, pages: Math.ceil(total / limit) },
 		});
 	} catch (error) {
 		res.status(500).json({
@@ -875,34 +695,26 @@ export const findOrganizationPendingDonations = async (
 };
 export const updateDonationStatus = async (req: Request, res: Response) => {
 	try {
-		// Check if user is authenticated
-		if (!req.user?._id) {
-			return res.status(401).json({
-				success: false,
-				message: "User not authenticated",
-			});
-		}
+		if (!req.user?._id)
+			return res
+				.status(401)
+				.json({ success: false, message: "User not authenticated" });
 
-		// Get donation ID from request params
 		const { donationId } = req.params;
 		const { status } = req.body;
 
-		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid donation ID is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid donation ID is required" });
 		}
 
 		if (!status || !Object.values(DonationStatus).includes(status)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid status is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid status is required" });
 		}
 
-		// Prevent organizations from cancelling donations
 		if (status === DonationStatus.CANCELLED) {
 			return res.status(403).json({
 				success: false,
@@ -910,33 +722,26 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Find the donation
 		const donation = await Donation.findById(donationId)
 			.populate<{ donor: IUser }>("donor", "name email")
 			.populate("cause", "title")
 			.populate("organization", "_id name");
 
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				message: "Donation not found",
-			});
-		}
+		if (!donation)
+			return res
+				.status(404)
+				.json({ success: false, message: "Donation not found" });
 
-		// Verify organization ownership
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
-			userId: req.user._id, // Check if the current user owns this organization
+			userId: req.user._id,
 		});
-
-		if (!organization) {
+		if (!organization)
 			return res.status(403).json({
 				success: false,
 				message: "You do not have permission to update this donation",
 			});
-		}
 
-		// Check if the current status is PENDING
 		if (donation.status !== DonationStatus.PENDING) {
 			return res.status(400).json({
 				success: false,
@@ -944,32 +749,10 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Update donation status
 		donation.status = status;
-
-		// If donation is being confirmed or received and it's a monetary donation,
-		// update the cause's raisedAmount
-		if (
-			(status === DonationStatus.CONFIRMED ||
-				status === DonationStatus.RECEIVED) &&
-			donation.type === DonationType.MONEY &&
-			donation.amount &&
-			donation.cause
-		) {
-			// Find the cause and update its raisedAmount
-			const causeId = donation.cause;
-			const cause = await Cause.findById(causeId);
-			// Note: raisedAmount is now calculated dynamically, no need to update manually
-			// if (cause) {
-			//   cause.raisedAmount += donation.amount;
-			//   await cause.save();
-			// }
-		}
-
-		// Save the updated donation
 		await donation.save();
 
-		// Send email notification to donor
+		// Send email
 		let emailStatus = "No email sent";
 		if (donation.donor?.email) {
 			try {
@@ -982,18 +765,19 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 					donation.unit
 				);
 				emailStatus = "Email sent successfully";
-			} catch (emailError) {
+			} catch {
 				emailStatus = "Failed to send email";
 			}
 		} else {
 			emailStatus = "No donor email provided";
 		}
 
-		let notificationStatus = "No notification created";
-		if (donation.donor?._id && (req as any).notificationService) {
-			try {
-				await (req as any).notificationService.createDonationStatusNotification(
+		// Send notification
+		const notificationStatus = donation.donor?._id
+			? await sendNotification(
+					req as any,
 					donation.donor._id.toString(),
+					"status",
 					{
 						donationId: donation._id.toString(),
 						status: status,
@@ -1001,17 +785,9 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 							(donation.organization as any)?.name || "Organization",
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
-				);
+				)
+			: "No donor ID provided";
 
-				notificationStatus = "Real-time notification created successfully";
-			} catch (notificationError) {
-				notificationStatus = "Failed to create real-time notification";
-			}
-		} else {
-			notificationStatus = "No donor ID provided";
-		}
-
-		// Return the updated donation
 		res.status(200).json({
 			success: true,
 			data: donation,
@@ -1028,64 +804,47 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 	}
 };
 
-// Mark donation as received with photo upload
 export const markDonationAsReceived = async (req: Request, res: Response) => {
 	try {
-		// Check if user is authenticated
-		if (!req.user?._id) {
-			return res.status(401).json({
-				success: false,
-				message: "User not authenticated",
-			});
-		}
+		if (!req.user?._id)
+			return res
+				.status(401)
+				.json({ success: false, message: "User not authenticated" });
 
-		// Get donation ID from request params
 		const { donationId } = req.params;
-
-		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid donation ID is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid donation ID is required" });
 		}
 
-		// Check if Cloudinary upload was successful
 		const cloudinaryResult = (req as any).cloudinaryResult;
-		if (!cloudinaryResult) {
+		if (!cloudinaryResult)
 			return res.status(400).json({
 				success: false,
 				message: "Photo upload to cloud storage failed",
 			});
-		}
 
-		// Find the donation
 		const donation = await Donation.findById(donationId)
 			.populate<{ donor: IUser }>("donor", "name email")
 			.populate("cause", "title")
 			.populate("organization", "_id name");
 
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				message: "Donation not found",
-			});
-		}
+		if (!donation)
+			return res
+				.status(404)
+				.json({ success: false, message: "Donation not found" });
 
-		// Verify organization ownership
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
-			userId: req.user._id, // Check if the current user owns this organization
+			userId: req.user._id,
 		});
-
-		if (!organization) {
+		if (!organization)
 			return res.status(403).json({
 				success: false,
 				message: "You do not have permission to update this donation",
 			});
-		}
 
-		// Check if the current status is APPROVED or PENDING
 		if (donation.status !== DonationStatus.APPROVED) {
 			return res.status(400).json({
 				success: false,
@@ -1093,44 +852,22 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			});
 		}
 
-		// Get the Cloudinary URL
 		const photoUrl = cloudinaryResult.url;
-
-		// Update donation status and receipt image
 		donation.status = DonationStatus.RECEIVED;
 		donation.receiptImage = photoUrl;
-
-		// Store photo metadata for better tracking (including Cloudinary info)
 		donation.receiptImageMetadata = {
 			originalName: cloudinaryResult.public_id.split("/").pop() || "unknown",
-			mimeType: "image/jpeg", // Cloudinary optimizes to JPEG by default
-			fileSize: 0, // Cloudinary doesn't provide file size in response
+			mimeType: "image/jpeg",
+			fileSize: 0,
 			uploadedAt: new Date(),
 			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
 			cloudinaryPublicId: cloudinaryResult.public_id,
 			cloudinaryUrl: cloudinaryResult.url,
 		};
 
-		// If it's a monetary donation, update the cause's raisedAmount
-		if (
-			donation.type === DonationType.MONEY &&
-			donation.amount &&
-			donation.cause
-		) {
-			// Find the cause and update its raisedAmount
-			const causeId = donation.cause;
-			const cause = await Cause.findById(causeId);
-			// Note: raisedAmount is now calculated dynamically, no need to update manually
-			// if (cause) {
-			//   cause.raisedAmount += donation.amount;
-			//   await cause.save();
-			// }
-		}
-
-		// Save the updated donation
 		await donation.save();
 
-		// Send email notification to donor
+		// Send email
 		let emailStatus = "No email sent";
 		if (donation.donor?.email) {
 			try {
@@ -1141,22 +878,22 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 					donation.amount,
 					donation.quantity,
 					donation.unit,
-					photoUrl // Pass the photo URL to the email function
+					photoUrl
 				);
 				emailStatus = "Email sent successfully";
-			} catch (emailError) {
+			} catch {
 				emailStatus = "Failed to send email";
 			}
 		} else {
 			emailStatus = "No donor email provided";
 		}
 
-		// Create real-time notification for donor
-		let notificationStatus = "No notification created";
-		if (donation.donor?._id && (req as any).notificationService) {
-			try {
-				await (req as any).notificationService.createDonationStatusNotification(
+		// Send notification
+		const notificationStatus = donation.donor?._id
+			? await sendNotification(
+					req as any,
 					donation.donor._id.toString(),
+					"status",
 					{
 						donationId: donation._id.toString(),
 						status: DonationStatus.RECEIVED,
@@ -1164,17 +901,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 							(donation.organization as any)?.name || "Organization",
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
-				);
+				)
+			: "No donor ID provided";
 
-				notificationStatus = "Real-time notification created successfully";
-			} catch (notificationError) {
-				notificationStatus = "Failed to create real-time notification";
-			}
-		} else {
-			notificationStatus = "No donor ID provided";
-		}
-
-		// Return the updated donation
 		res.status(200).json({
 			success: true,
 			data: donation,
@@ -1184,78 +913,57 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			photoUrl,
 		});
 	} catch (error: any) {
-		console.error("Error marking donation as received:", error);
-
-		// Determine the appropriate status code
 		const statusCode = error?.status || error?.statusCode || 500;
-
-		// Create a detailed error response
 		res.status(statusCode).json({
 			success: false,
 			message: "Error marking donation as received",
 			error: error?.message || "Unknown error occurred",
-			details: {
-				name: error?.name,
-				code: error?.code,
-				path: error?.path,
-				type: typeof error,
-			},
 		});
 	}
 };
 
-// Confirm donation receipt by donor
 export const confirmDonationReceipt = async (req: Request, res: Response) => {
 	try {
-		// Check if user is authenticated
-		if (!req.user?._id) {
-			return res.status(401).json({
-				success: false,
-				message: "User not authenticated",
-			});
-		}
+		if (!req.user?._id)
+			return res
+				.status(401)
+				.json({ success: false, message: "User not authenticated" });
 
-		// Get donation ID from request params
 		const { donationId } = req.params;
-
-		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid donation ID is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid donation ID is required" });
 		}
 
-		// Find the donation
 		const donation = await Donation.findById(donationId).populate(
 			"organization",
 			"name email"
 		);
+		if (!donation)
+			return res
+				.status(404)
+				.json({ success: false, message: "Donation not found" });
 
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				message: "Donation not found",
-			});
-		}
-
-		// Verify donor ownership
 		if (donation.donor.toString() !== req.user._id.toString()) {
-			return res.status(403).json({
-				success: false,
-				message: "You do not have permission to confirm this donation",
-			});
+			return res
+				.status(403)
+				.json({
+					success: false,
+					message: "You do not have permission to confirm this donation",
+				});
 		}
 
-		// Check if the current status is RECEIVED
 		if (donation.status !== DonationStatus.RECEIVED) {
-			return res.status(400).json({
-				success: false,
-				message: "Only received donations can be confirmed",
-			});
+			return res
+				.status(400)
+				.json({
+					success: false,
+					message: "Only received donations can be confirmed",
+				});
 		}
 
-		// Generate PDF receipt for the donor
+		// Generate PDF receipt
 		let pdfReceiptUrl = "";
 		try {
 			const donationData = {
@@ -1274,26 +982,17 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 				receivedDate: new Date(),
 				cause: (donation.cause as any)?.title || undefined,
 			};
-
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
 		} catch (pdfError) {
-			console.error("Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
 		}
 
-		// Update donation status and confirmation date
 		donation.status = DonationStatus.CONFIRMED;
 		donation.confirmationDate = new Date();
-
-		// Store the PDF receipt URL if generated successfully
-		if (pdfReceiptUrl) {
-			donation.pdfReceiptUrl = pdfReceiptUrl;
-		}
-
-		// Save the updated donation
+		if (pdfReceiptUrl) donation.pdfReceiptUrl = pdfReceiptUrl;
 		await donation.save();
 
-		// Send email notification to donor with receipt
+		// Send emails
 		let donorEmailStatus = "No email sent to donor";
 		if ((req.user as any)?.email) {
 			try {
@@ -1304,23 +1003,17 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 					donation.amount,
 					donation.quantity,
 					donation.unit,
-					undefined, // no photo URL needed for confirmed status
-					pdfReceiptUrl // pass the PDF receipt URL
+					undefined,
+					pdfReceiptUrl
 				);
 				donorEmailStatus = "Email sent successfully to donor with receipt";
-			} catch (emailError) {
-				console.error(
-					`Failed to send email to donor for donation ${donationId}:`,
-					emailError
-				);
+			} catch {
 				donorEmailStatus = "Failed to send email to donor";
 			}
 		} else {
-			console.warn(`No email provided for donor of donation ${donationId}`);
 			donorEmailStatus = "No donor email provided";
 		}
 
-		// Send email notification to organization
 		let orgEmailStatus = "No email sent to organization";
 		const organizationData = donation.organization as any;
 		if (organizationData?.email) {
@@ -1334,53 +1027,35 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 					donation.unit
 				);
 				orgEmailStatus = "Email sent successfully to organization";
-			} catch (emailError) {
-				console.error(
-					`Failed to send email to organization for donation ${donationId}:`,
-					emailError
-				);
+			} catch {
 				orgEmailStatus = "Failed to send email to organization";
 			}
 		} else {
-			console.warn(
-				`No email provided for organization of donation ${donationId}`
-			);
 			orgEmailStatus = "No organization email provided";
 		}
 
-		// Create real-time notification for organization
+		// Send notification
 		let notificationStatus = "No notification created";
 		if (donation.organization && (req as any).notificationService) {
-			try {
-				// Find the organization document to get the userId
-				const orgDoc = await Organization.findById(donation.organization._id);
-				if (orgDoc?.userId) {
-					await (
-						req as any
-					).notificationService.createDonationStatusNotification(
-						orgDoc.userId.toString(),
-						{
-							donationId: donation._id.toString(),
-							status: DonationStatus.CONFIRMED,
-							organizationName:
-								(donation.organization as any)?.name || "Organization",
-							cause: (donation.cause as any)?.title || "Unknown cause",
-						}
-					);
-					notificationStatus = "Real-time notification created successfully";
-				} else {
-					notificationStatus = "No organization userId found";
-				}
-			} catch (notificationError) {
-				console.error(
-					`Failed to create real-time notification for donation ${donationId}:`,
-					notificationError
+			const orgDoc = await Organization.findById(donation.organization._id);
+			if (orgDoc?.userId) {
+				notificationStatus = await sendNotification(
+					req as any,
+					orgDoc.userId.toString(),
+					"status",
+					{
+						donationId: donation._id.toString(),
+						status: DonationStatus.CONFIRMED,
+						organizationName:
+							(donation.organization as any)?.name || "Organization",
+						cause: (donation.cause as any)?.title || "Unknown cause",
+					}
 				);
-				notificationStatus = "Failed to create real-time notification";
+			} else {
+				notificationStatus = "No organization userId found";
 			}
 		}
 
-		// Return the updated donation
 		res.status(200).json({
 			success: true,
 			data: donation,
@@ -1391,95 +1066,60 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
-		console.error("Error confirming donation:", error);
-		res.status(500).json({
-			success: false,
-			message: "Error confirming donation",
-			error: error?.message || "Unknown error occurred",
-		});
+		res
+			.status(500)
+			.json({
+				success: false,
+				message: "Error confirming donation",
+				error: error?.message || "Unknown error occurred",
+			});
 	}
 };
 
-// Mark donation as confirmed with receipt upload (for organizations)
 export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 	try {
-		// Check if user is authenticated
-		if (!req.user?._id) {
-			console.error("User not authenticated");
-			return res.status(401).json({
-				success: false,
-				message: "User not authenticated",
-			});
-		}
+		if (!req.user?._id)
+			return res
+				.status(401)
+				.json({ success: false, message: "User not authenticated" });
 
-		// Get donation ID from request params
 		const { donationId } = req.params;
-
-		// Validate input
 		if (!donationId || !mongoose.Types.ObjectId.isValid(donationId)) {
-			return res.status(400).json({
-				success: false,
-				message: "Valid donation ID is required",
-			});
+			return res
+				.status(400)
+				.json({ success: false, message: "Valid donation ID is required" });
 		}
 
-		// No file upload required - PDF will be auto-generated
-		console.log("📄 Auto-generating PDF receipt for donation confirmation...");
-		console.log("🔍 Looking for donation with ID:", donationId);
-
-		// Find the donation and populate necessary fields
 		const donation = await Donation.findById(donationId)
 			.populate("donor", "email")
 			.populate("organization", "name email");
-
-		console.log("📋 Found donation:", donation ? "Yes" : "No");
-
-		if (!donation) {
-			return res.status(404).json({
-				success: false,
-				message: "Donation not found",
-			});
-		}
-
-		// Verify organization ownership
-		console.log("🏢 Checking organization ownership...");
-		console.log("🏢 Donation organization ID:", donation?.organization._id);
-		console.log("👤 Current user ID:", req.user._id);
+		if (!donation)
+			return res
+				.status(404)
+				.json({ success: false, message: "Donation not found" });
 
 		const organization = await Organization.findOne({
 			_id: donation?.organization._id,
-			userId: req.user._id, // Check if the current user owns this organization
+			userId: req.user._id,
 		});
-
-		console.log("🏢 Organization found:", organization ? "Yes" : "No");
-
-		if (!organization) {
-			console.log("❌ Permission denied - user doesn't own this organization");
-			return res.status(403).json({
-				success: false,
-				message: "You do not have permission to update this donation",
-			});
-		}
-
-		// Check if the current status is RECEIVED
-		console.log("📊 Current donation status:", donation.status);
-		console.log("📊 Required status:", DonationStatus.RECEIVED);
+		if (!organization)
+			return res
+				.status(403)
+				.json({
+					success: false,
+					message: "You do not have permission to update this donation",
+				});
 
 		if (donation.status !== DonationStatus.RECEIVED) {
-			console.log(
-				"❌ Status check failed - donation is not in RECEIVED status"
-			);
-			return res.status(400).json({
-				success: false,
-				message: "Only received donations can be marked as confirmed",
-			});
+			return res
+				.status(400)
+				.json({
+					success: false,
+					message: "Only received donations can be marked as confirmed",
+				});
 		}
 
-		console.log("✅ Status check passed - proceeding with confirmation");
-
-		// No receipt file needed - PDF will be auto-generated
-
-		// Generate PDF receipt for the donor
+		// Generate PDF receipt
 		let pdfReceiptUrl = "";
 		try {
 			const donationData = {
@@ -1498,35 +1138,24 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 				receivedDate: new Date(),
 				cause: (donation.cause as any)?.title || undefined,
 			};
-
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
 		} catch (pdfError) {
-			console.error("Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
 		}
 
-		// Update donation status to confirmed
 		donation.status = DonationStatus.CONFIRMED;
 		donation.confirmationDate = new Date();
+		if (pdfReceiptUrl) donation.pdfReceiptUrl = pdfReceiptUrl;
 
-		// Store the PDF receipt URL if generated successfully
-		if (pdfReceiptUrl) {
-			donation.pdfReceiptUrl = pdfReceiptUrl;
-		}
-
-		// Update receipt metadata for confirmation
-		if (!donation.receiptImageMetadata) {
-			donation.receiptImageMetadata = {};
-		}
+		if (!donation.receiptImageMetadata) donation.receiptImageMetadata = {};
 		donation.receiptImageMetadata.confirmedAt = new Date();
 		donation.receiptImageMetadata.confirmedBy = new mongoose.Types.ObjectId(
 			req.user._id
 		);
 
-		// Save the updated donation
 		await donation.save();
 
-		// Send email notification to donor with PDF receipt
+		// Send email
 		let emailStatus = "No email sent";
 		const donorData = donation.donor as any;
 		if (donorData?.email) {
@@ -1538,28 +1167,23 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 					donation.amount,
 					donation.quantity,
 					donation.unit,
-					undefined, // no photo URL needed for confirmed status
-					pdfReceiptUrl // pass the PDF receipt URL
+					undefined,
+					pdfReceiptUrl
 				);
 				emailStatus = "Email sent successfully to donor with receipt";
-			} catch (emailError) {
-				console.error(
-					`Failed to send email to donor for donation ${donationId}:`,
-					emailError
-				);
+			} catch {
 				emailStatus = "Failed to send email to donor";
 			}
 		} else {
-			console.warn(`No email provided for donor of donation ${donationId}`);
 			emailStatus = "No donor email provided";
 		}
 
-		// Create real-time notification for donor
-		let notificationStatus = "No notification created";
-		if (donation.donor?._id && (req as any).notificationService) {
-			try {
-				await (req as any).notificationService.createDonationStatusNotification(
+		// Send notification
+		const notificationStatus = donation.donor?._id
+			? await sendNotification(
+					req as any,
 					donation.donor._id.toString(),
+					"status",
 					{
 						donationId: donation._id.toString(),
 						status: DonationStatus.CONFIRMED,
@@ -1567,22 +1191,9 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 							(donation.organization as any)?.name || "Organization",
 						cause: (donation.cause as any)?.title || "Unknown cause",
 					}
-				);
+				)
+			: "No donor ID provided";
 
-				notificationStatus = "Real-time notification created successfully";
-			} catch (notificationError) {
-				console.error(
-					`Failed to create real-time notification for donation ${donationId}:`,
-					notificationError
-				);
-				notificationStatus = "Failed to create real-time notification";
-			}
-		} else {
-			console.warn(`No donor ID provided for donation ${donationId}`);
-			notificationStatus = "No donor ID provided";
-		}
-
-		// Return the updated donation
 		res.status(200).json({
 			success: true,
 			data: donation,
@@ -1592,11 +1203,12 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 			pdfReceiptUrl: pdfReceiptUrl || null,
 		});
 	} catch (error: any) {
-		console.error("Error marking donation as confirmed:", error);
-		res.status(500).json({
-			success: false,
-			message: "Error marking donation as confirmed",
-			error: error?.message || "Unknown error occurred",
-		});
+		res
+			.status(500)
+			.json({
+				success: false,
+				message: "Error marking donation as confirmed",
+				error: error?.message || "Unknown error occurred",
+			});
 	}
 };

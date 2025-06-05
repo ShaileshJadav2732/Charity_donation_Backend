@@ -4,6 +4,7 @@ import {
 	getCampaigns,
 	getCampaignById,
 	getCampaignDetails,
+	getCampaignDetailsWithDonations,
 	updateCampaign,
 	deleteCampaign,
 	addCauseToCampaign,
@@ -18,6 +19,10 @@ const router = express.Router();
 router.get("/", getCampaigns);
 router.get("/:campaignId", getCampaignById);
 router.get("/:campaignId/details", getCampaignDetails);
+router.get(
+	"/:campaignId/details-with-donations",
+	getCampaignDetailsWithDonations
+);
 
 // Protected routes (require authentication)
 router.use(authenticate);

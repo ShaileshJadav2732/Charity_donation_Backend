@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Cause, { ICause } from "../models/cause.model";
+import Cause from "../models/cause.model";
 import Donation from "../models/donation.model";
 import Campaign from "../models/campaign.model";
 import Organization from "../models/organization.model";
@@ -8,98 +8,69 @@ import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
 
-// Extended Request interface with user property
-interface RequestWithUser extends Request {
-	user?: any; // Using any for now, but ideally should match your user type
-}
-
-interface AuthRequest extends RequestWithUser {
+interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }
 
-// Helper function to calculate raised amount for a cause (money only)
-const calculateRaisedAmount = async (causeId: string): Promise<number> => {
+// Helper to calculate cause stats
+const calculateStats = async (causeId: string) => {
 	try {
-		const result = await Donation.aggregate([
-			{
-				$match: {
-					cause: new mongoose.Types.ObjectId(causeId),
-					status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
-					type: "MONEY",
+		const [moneyResult, itemResult, uniqueDonors] = await Promise.all([
+			Donation.aggregate([
+				{
+					$match: {
+						cause: new mongoose.Types.ObjectId(causeId),
+						status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+						type: "MONEY",
+					},
 				},
-			},
-			{
-				$group: {
-					_id: null,
-					totalAmount: { $sum: "$amount" },
+				{ $group: { _id: null, totalAmount: { $sum: "$amount" } } },
+			]),
+			Donation.aggregate([
+				{
+					$match: {
+						cause: new mongoose.Types.ObjectId(causeId),
+						status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+						type: { $ne: "MONEY" },
+					},
 				},
-			},
+				{
+					$group: {
+						_id: null,
+						totalItems: { $sum: { $ifNull: ["$quantity", 1] } },
+					},
+				},
+			]),
+			Donation.distinct("donor", {
+				cause: new mongoose.Types.ObjectId(causeId),
+				status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+			}),
 		]);
 
-		return result.length > 0 ? result[0].totalAmount || 0 : 0;
+		return {
+			raisedAmount: moneyResult[0]?.totalAmount || 0,
+			itemDonations: itemResult[0]?.totalItems || 0,
+			donorCount: uniqueDonors.length,
+		};
 	} catch (error) {
-		console.error("Error calculating raised amount:", error);
-		return 0;
+		return { raisedAmount: 0, itemDonations: 0, donorCount: 0 };
 	}
 };
 
-// Helper function to calculate item donation counts for a cause
-const calculateItemDonations = async (causeId: string): Promise<number> => {
-	try {
-		const result = await Donation.aggregate([
-			{
-				$match: {
-					cause: new mongoose.Types.ObjectId(causeId),
-					status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
-					type: { $ne: "MONEY" }, // Count all non-monetary donations
-				},
-			},
-			{
-				$group: {
-					_id: null,
-					totalItems: { $sum: { $ifNull: ["$quantity", 1] } }, // Use quantity or default to 1
-				},
-			},
-		]);
-
-		return result.length > 0 ? result[0].totalItems || 0 : 0;
-	} catch (error) {
-		console.error("Error calculating item donations:", error);
-		return 0;
-	}
-};
-
-// Helper function to calculate total donor count (both money and items)
-const calculateDonorCount = async (causeId: string): Promise<number> => {
-	try {
-		const uniqueDonors = await Donation.distinct("donor", {
-			cause: new mongoose.Types.ObjectId(causeId),
-			status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
-		});
-
-		return uniqueDonors.length;
-	} catch (error) {
-		console.error("Error calculating donor count:", error);
-		return 0;
-	}
-};
-
-// Helper function to format cause response for frontend
-const formatCauseResponse = async (cause: any) => {
-	const [raisedAmount, itemDonations, donorCount] = await Promise.all([
-		calculateRaisedAmount(cause._id.toString()),
-		calculateItemDonations(cause._id.toString()),
-		calculateDonorCount(cause._id.toString()),
-	]);
+// Helper to format cause response
+const formatResponse = async (cause: any) => {
+	const { raisedAmount, itemDonations, donorCount } = await calculateStats(
+		cause._id.toString()
+	);
 
 	return {
 		id: cause._id.toString(),
 		title: cause.title,
 		description: cause.description,
 		targetAmount: cause.targetAmount,
-		raisedAmount: raisedAmount, // Money raised
-		itemDonations: itemDonations, // Number of items donated
-		donorCount: donorCount, // Total unique donors
+		raisedAmount,
+		itemDonations,
+		donorCount,
 		imageUrl: cause.imageUrl,
 		tags: cause.tags,
 		organizationId:
@@ -107,7 +78,7 @@ const formatCauseResponse = async (cause: any) => {
 			cause.organizationId?.toString() ||
 			"",
 		organizationName: cause.organizationId?.name || "",
-		organizationUserId: cause.organizationId?.userId?.toString() || "", // Include organization's userId for messaging
+		organizationUserId: cause.organizationId?.userId?.toString() || "",
 		acceptanceType: cause.acceptanceType || "money",
 		donationItems: cause.donationItems || [],
 		acceptedDonationTypes: cause.acceptedDonationTypes || ["MONEY"],
@@ -116,83 +87,49 @@ const formatCauseResponse = async (cause: any) => {
 	};
 };
 
-// Get all causes with pagination and filters
 export const getCauses = catchAsync(async (req: Request, res: Response) => {
 	const page = parseInt(req.query.page as string) || 1;
-	const limit = parseInt(req.query.limit as string) || 10;
+	const limit = parseInt(req.query.limit as string) || 20;
 	const search = req.query.search as string;
 	const tag = req.query.tag as string;
 
 	const query: any = {};
-
-	if (search) {
-		query.$text = { $search: search };
-	}
-
-	if (tag) {
-		query.tags = tag;
-	}
-
-	const skip = (page - 1) * limit;
+	if (search) query.$text = { $search: search };
+	if (tag) query.tags = tag;
 
 	const [causes, total] = await Promise.all([
 		Cause.find(query)
 			.sort({ createdAt: -1 })
-			.skip(skip)
+			.skip((page - 1) * limit)
 			.limit(limit)
-			.populate("organizationId", "name userId"), // Include userId for messaging
+			.populate("organizationId", "name userId"),
 		Cause.countDocuments(query),
 	]);
 
-	// Format causes with calculated raised amounts
 	const formattedCauses = await Promise.all(
-		causes.map((cause) => formatCauseResponse(cause))
+		causes.map((cause) => formatResponse(cause))
 	);
 
-	res.status(200).json({
-		causes: formattedCauses,
-		total,
-		page,
-		limit,
-	});
+	res.status(200).json({ causes: formattedCauses, total, page, limit });
 });
 
-// Get a single cause by ID
-export const getCauseById = catchAsync(
-	async (req: RequestWithUser, res: Response) => {
-		const causeId = req.params.id;
-
-		if (!mongoose.Types.ObjectId.isValid(causeId)) {
-			throw new AppError("Invalid cause ID", 400);
-		}
-
-		try {
-			const cause = await Cause.findById(causeId).populate(
-				"organizationId",
-				"name userId" // Include userId for messaging
-			);
-
-			if (!cause) {
-				throw new AppError("Cause not found", 404);
-			}
-
-			const formattedCause = await formatCauseResponse(cause);
-
-			res.status(200).json({
-				cause: formattedCause,
-			});
-		} catch (error) {
-			throw error;
-		}
+export const getCauseById = catchAsync(async (req: Request, res: Response) => {
+	if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+		throw new AppError("Invalid cause ID", 400);
 	}
-);
-// Create a new cause (organization only)
 
+	const cause = await Cause.findById(req.params.id).populate(
+		"organizationId",
+		"name userId"
+	);
+	if (!cause) throw new AppError("Cause not found", 404);
+
+	res.status(200).json({ cause: await formatResponse(cause) });
+});
 export const createCause = catchAsync(
 	async (req: AuthRequest, res: Response) => {
-		if (!req.user) {
+		if (!req.user)
 			throw new AppError("Unauthorized: Authentication required", 401);
-		}
 
 		const {
 			title,
@@ -205,16 +142,12 @@ export const createCause = catchAsync(
 			acceptedDonationTypes,
 		} = req.body;
 
-		// Validate required fields
 		if (!title || !description || targetAmount === undefined || !imageUrl) {
 			throw new AppError("Missing required fields", 400);
 		}
 
-		// Determine the acceptance type to validate targetAmount correctly
 		const finalAcceptanceType = acceptanceType || "money";
 
-		// For money or both acceptance types, targetAmount must be > 0
-		// For items-only, targetAmount can be 0
 		if (finalAcceptanceType !== "items" && targetAmount <= 0) {
 			throw new AppError(
 				"Target amount must be greater than 0 for money-based causes",
@@ -222,12 +155,10 @@ export const createCause = catchAsync(
 			);
 		}
 
-		// For items-only causes, ensure targetAmount is not negative
 		if (finalAcceptanceType === "items" && targetAmount < 0) {
 			throw new AppError("Target amount cannot be negative", 400);
 		}
 
-		// For items or both acceptance types, ensure donation items are provided
 		if (
 			(finalAcceptanceType === "items" || finalAcceptanceType === "both") &&
 			(!donationItems || donationItems.length === 0)
@@ -238,15 +169,10 @@ export const createCause = catchAsync(
 			);
 		}
 
-		//  Find the organization based on the logged-in user's ID
 		const organization = await Organization.findOne({ userId: req.user._id });
-
-		if (!organization) {
+		if (!organization)
 			throw new AppError("Organization not found for the logged-in user", 404);
-		}
 
-		// Use the already determined acceptance type for donation items processing
-		// finalAcceptanceType is already defined above
 		let finalDonationItems = [];
 		let finalAcceptedDonationTypes = ["MONEY"];
 
@@ -264,7 +190,6 @@ export const createCause = catchAsync(
 							]
 						: acceptedDonationTypes;
 			} else if (finalDonationItems.length > 0) {
-				// If no acceptedDonationTypes provided but donationItems exist, infer types
 				const inferredTypes = finalDonationItems.map((item: string) => {
 					switch (item.toUpperCase()) {
 						case "CLOTHES":
@@ -291,7 +216,6 @@ export const createCause = catchAsync(
 			}
 		}
 
-		//  Use organization._id as the reference
 		const cause = await Cause.create({
 			title,
 			description,
@@ -306,28 +230,18 @@ export const createCause = catchAsync(
 
 		await cause.populate("organizationId", "name userId");
 
-		const formattedCause = await formatCauseResponse(cause);
-
-		res.status(201).json({
-			cause: formattedCause,
-		});
+		res.status(201).json({ cause: await formatResponse(cause) });
 	}
 );
 
-// Update an existing cause (organization only)
 export const updateCause = catchAsync(
 	async (req: AuthRequest, res: Response) => {
-		if (!req.user) {
+		if (!req.user)
 			throw new AppError("Unauthorized: Authentication required", 401);
-		}
 
-		const causeId = await Cause.findById(req.params.id);
+		const cause = await Cause.findById(req.params.id);
+		if (!cause) throw new AppError("Cause not found", 404);
 
-		if (!causeId) {
-			throw new AppError("Cause not found", 404);
-		}
-
-		// Check if user's organization owns the cause
 		if (!req.user._id && req.user.role === "organization") {
 			throw Error("User Is not Authenticated ");
 		}
@@ -343,45 +257,32 @@ export const updateCause = catchAsync(
 			acceptedDonationTypes,
 		} = req.body;
 
-		const cause = causeId;
-
-		// Validate targetAmount if provided
 		if (targetAmount !== undefined) {
 			const updateAcceptanceType = acceptanceType || cause.acceptanceType;
-
-			// For money or both acceptance types, targetAmount must be > 0
-			// For items-only, targetAmount can be 0
 			if (updateAcceptanceType !== "items" && targetAmount <= 0) {
 				throw new AppError(
 					"Target amount must be greater than 0 for money-based causes",
 					400
 				);
 			}
-
-			// For items-only causes, ensure targetAmount is not negative
 			if (updateAcceptanceType === "items" && targetAmount < 0) {
 				throw new AppError("Target amount cannot be negative", 400);
 			}
 		}
 
-		// Process donation-related fields
 		let finalAcceptanceType = acceptanceType;
 		let finalDonationItems = donationItems;
 		let finalAcceptedDonationTypes = acceptedDonationTypes;
 
-		// If acceptanceType is provided, update related fields accordingly
 		if (finalAcceptanceType) {
 			if (finalAcceptanceType === "money") {
-				// For money-only, clear item-related fields
 				finalDonationItems = [];
 				finalAcceptedDonationTypes = ["MONEY"];
 			} else if (
 				finalAcceptanceType === "items" ||
 				finalAcceptanceType === "both"
 			) {
-				// For items or both, ensure we have the right donation types
 				if (finalDonationItems && finalDonationItems.length > 0) {
-					// If donationItems provided but no acceptedDonationTypes, infer them
 					if (
 						!finalAcceptedDonationTypes ||
 						finalAcceptedDonationTypes.length === 0
@@ -413,7 +314,6 @@ export const updateCause = catchAsync(
 						finalAcceptanceType === "both" &&
 						!finalAcceptedDonationTypes.includes("MONEY")
 					) {
-						// Ensure MONEY is included for "both" type
 						finalAcceptedDonationTypes = [
 							"MONEY",
 							...finalAcceptedDonationTypes,
@@ -423,7 +323,6 @@ export const updateCause = catchAsync(
 			}
 		}
 
-		// Update fields
 		cause.set({
 			title: title || cause.title,
 			description: description || cause.description,
@@ -439,38 +338,24 @@ export const updateCause = catchAsync(
 		});
 
 		await cause.save();
-
 		await cause.populate("organizationId", "name userId");
 
-		const formattedCause = await formatCauseResponse(cause);
-
-		res.status(200).json({
-			cause: formattedCause,
-		});
+		res.status(200).json({ cause: await formatResponse(cause) });
 	}
 );
 
-// Delete a cause (organization only)
 export const deleteCause = catchAsync(
 	async (req: AuthRequest, res: Response) => {
-		if (!req.user) {
+		if (!req.user)
 			throw new AppError("Unauthorized: Authentication required", 401);
-		}
 
 		const cause = await Cause.findById(req.params.id);
+		if (!cause) throw new AppError("Cause not found", 404);
 
-		if (!cause) {
-			throw new AppError("Cause not found", 404);
-		}
-
-		// Find the organization based on the logged-in user's ID
 		const organization = await Organization.findOne({ userId: req.user._id });
-
-		if (!organization) {
+		if (!organization)
 			throw new AppError("Organization not found for the logged-in user", 404);
-		}
 
-		// Check if user's organization owns the cause
 		if (!cause.organizationId.equals(organization._id)) {
 			throw new AppError(
 				"Unauthorized: You do not have permission to delete this cause",
@@ -479,7 +364,6 @@ export const deleteCause = catchAsync(
 		}
 
 		await cause.deleteOne();
-
 		res.status(204).json({});
 	}
 );
@@ -518,17 +402,11 @@ export const getOrganizationCauses = catchAsync(
 			Cause.countDocuments(query),
 		]);
 
-		// Format causes with calculated raised amounts
 		const formattedCauses = await Promise.all(
-			causes.map((cause) => formatCauseResponse(cause))
+			causes.map((cause) => formatResponse(cause))
 		);
 
-		res.status(200).json({
-			causes: formattedCauses,
-			total,
-			page,
-			limit,
-		});
+		res.status(200).json({ causes: formattedCauses, total, page, limit });
 	}
 );
 
@@ -583,9 +461,8 @@ export const getActiveCampaignCauses = catchAsync(
 				Cause.countDocuments(query),
 			]);
 
-			// Format causes with calculated raised amounts
 			const formattedCauses = await Promise.all(
-				causes.map((cause) => formatCauseResponse(cause))
+				causes.map((cause) => formatResponse(cause))
 			);
 
 			res.status(200).json({
@@ -600,44 +477,22 @@ export const getActiveCampaignCauses = catchAsync(
 	}
 );
 
-// Get organization User ID from cause ID for messaging
 export const getOrganizationUserIdByCauseId = catchAsync(
 	async (req: Request, res: Response) => {
 		const { causeId } = req.params;
+		if (!causeId) throw new AppError("Cause ID is required", 400);
 
-		if (!causeId) {
-			throw new AppError("Cause ID is required", 400);
-		}
-
-		console.log("=== GET ORGANIZATION USER ID BY CAUSE ID ===");
-		console.log("Cause ID:", causeId);
-
-		// Find the cause and populate organization
 		const cause = await Cause.findById(causeId).populate(
 			"organizationId",
 			"name userId email"
 		);
-
-		if (!cause) {
-			throw new AppError("Cause not found", 404);
-		}
+		if (!cause) throw new AppError("Cause not found", 404);
 
 		const organization = cause.organizationId as any;
-
-		if (!organization) {
+		if (!organization)
 			throw new AppError("Organization not found for this cause", 404);
-		}
-
-		if (!organization.userId) {
+		if (!organization.userId)
 			throw new AppError("Organization User ID not found", 404);
-		}
-
-		console.log("Found Organization:", {
-			organizationId: organization._id.toString(),
-			organizationName: organization.name,
-			organizationUserId: organization.userId.toString(),
-		});
-		console.log("=======================================");
 
 		res.status(200).json({
 			success: true,
@@ -646,7 +501,7 @@ export const getOrganizationUserIdByCauseId = catchAsync(
 				causeTitle: cause.title,
 				organizationId: organization._id.toString(),
 				organizationName: organization.name,
-				organizationUserId: organization.userId.toString(), // This is what we need for messaging
+				organizationUserId: organization.userId.toString(),
 				organizationEmail: organization.email,
 			},
 		});
