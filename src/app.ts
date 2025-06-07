@@ -2,39 +2,28 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import dotenv from "dotenv";
-import path from "path";
 import connectDB from "./config/db.config";
 import authRoutes from "./routes/auth.routes";
 import profileRoutes from "./routes/profile.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import causeRoutes from "./routes/cause.routes";
 import campaignRoutes from "./routes/campaign.routes";
-
 import notificationRoutes from "./routes/notification.routes";
 import messageRoutes from "./routes/message.routes";
-
 import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
 import uploadRoutes from "./routes/upload.routes";
 import { NotificationService } from "./services/notificationService";
 import { handleStripeWebhook } from "./controllers/payment.controller";
-import { authenticate } from "./middleware/auth.middleware";
-// Load environment variables
-dotenv.config();
+import { authenticate } from "middleware/auth.middleware";
 
-// Initialize Express app
+dotenv.config();
 const app: Application = express();
 
-// Connect to MongoDB
 connectDB();
 
-// Middleware
-const allowedOrigins = [
-	"http://localhost:3000",
-	"http://localhost:3001",
-	"https://a160-115-242-213-210.ngrok-free.app/", // optional, for ngrok testing
-];
+const allowedOrigins = ["http://localhost:3000", "http://localhost:3001"];
 
 app.use(
 	cors({
@@ -51,6 +40,7 @@ app.use(
 		exposedHeaders: ["Content-Disposition"],
 	})
 );
+app.use(authenticate);
 
 app.post(
 	"/api/payments/webhook",
@@ -63,7 +53,6 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));
 
-// Message routes (now after JSON parsing middleware)
 app.use("/api/messages", messageRoutes);
 
 // Middleware to attach notification service to requests
@@ -75,25 +64,9 @@ app.use((req: any, res, next) => {
 	next();
 });
 
-// Remove bodyParser.json() as it's redundant with express.json()
-// app.use(bodyParser.json());
-
-// Serve static files from uploads directory (MUST be before API routes)
-app.use(
-	"/uploads/donation-photos",
-	express.static(path.join(__dirname, "../uploads/donation-photos"))
-);
-app.use(
-	"/uploads/profile-photos",
-	express.static(path.join(__dirname, "../uploads/profile-photos"))
-);
-app.use(
-	"/uploads/receipts",
-	express.static(path.join(__dirname, "../uploads/receipts"))
-);
-
 // Routes
 app.use("/api/auth", authRoutes);
+
 app.use("/api/profile", profileRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/causes", causeRoutes);
@@ -115,9 +88,5 @@ app.get("/health", (req: Request, res: Response) => {
 app.use((err: any, req: Request, res: Response, next: Function) => {
 	console.error("Error:", err);
 });
-// 404 route
-// app.use, (req: Request, res: Response) => {
-// 	res.status(404).json({ message: "Route not found" });
-// });
 
 export default app;

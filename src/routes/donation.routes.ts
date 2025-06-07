@@ -18,7 +18,7 @@ import { authorize } from "../middleware/role.middleware";
 import {
 	uploadDonationPhotoToCloudinary,
 	uploadReceiptToCloudinary,
-} from "../middleware/upload.middleware";
+} from "../middleware/cloudinary.middleware";
 
 const router = express.Router();
 // All routes require authentication
@@ -37,11 +37,7 @@ router.get("/test-auth", (req: express.Request, res: express.Response) => {
 router.post("/", createDonation);
 
 // Get donor's donations with optional filtering
-router.get(
-	"/",
-	authorize(["donor"]),
-	getDonorDonations
-);
+router.get("/", authorize(["donor"]), getDonorDonations);
 
 // Get a single donation by ID
 router.get("/:id", getDonationById);
@@ -50,7 +46,8 @@ router.get("/:id", getDonationById);
 router.get("/:id/debug", authenticate, async (req, res) => {
 	try {
 		const { id } = req.params;
-		const donation = await require("../models/donation.model").default.findById(id)
+		const donation = await require("../models/donation.model")
+			.default.findById(id)
 			.populate("donor", "email")
 			.populate("organization", "name email");
 
@@ -58,10 +55,11 @@ router.get("/:id/debug", authenticate, async (req, res) => {
 			return res.json({ error: "Donation not found" });
 		}
 
-		const organization = await require("../models/organization.model").default.findOne({
-			_id: donation.organization._id,
-			userId: req.user._id,
-		});
+		const organization =
+			await require("../models/organization.model").default.findOne({
+				_id: donation.organization._id,
+				userId: req.user._id,
+			});
 
 		res.json({
 			donation: {

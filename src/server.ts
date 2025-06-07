@@ -3,34 +3,27 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocketIO } from "./socket/socketHandler";
-
-// Load environment variables
 dotenv.config();
 
-// Set port
 const PORT = process.env.PORT || 8080;
 
-// Create HTTP server
 const server = createServer(app);
 
-// Setup Socket.IO
 const io = new Server(server, {
 	cors: {
 		origin: ["http://localhost:3000", "http://localhost:3001"],
-		methods: ["GET", "POST"],
+		methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
 		credentials: true,
 	},
-	pingTimeout: 60000, // 60 seconds
-	pingInterval: 25000, // 25 seconds
-	connectTimeout: 45000, // 45 seconds
+	pingTimeout: 60000,
+	pingInterval: 25000,
+	connectTimeout: 45000,
 	transports: ["websocket", "polling"],
 	allowEIO3: true,
 });
 
-// Setup socket handlers
 setupSocketIO(io);
 
-// Make io available globally
 app.set("io", io);
 
 // Start server
