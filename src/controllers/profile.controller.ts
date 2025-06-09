@@ -388,7 +388,7 @@ export const uploadDonorProfileImage = async (
 
 		// Update profile with Cloudinary URL
 		donorProfile.profileImage = req.cloudinaryUrl;
-		donorProfile.cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
+		(donorProfile as any).cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
 		await donorProfile.save();
 
 		return res.status(200).json({

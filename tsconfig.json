@@ -9,6 +9,9 @@
 		"forceConsistentCasingInFileNames": false,
 		"skipLibCheck": true,
 		"noImplicitAny": false,
+		"noImplicitReturns": false,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
 		"typeRoots": ["./node_modules/@types", "./src/types"],
 		"baseUrl": "./src",
 		"paths": {

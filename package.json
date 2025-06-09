@@ -4,8 +4,11 @@
 	"main": "dist/server.js",
 	"scripts": {
 		"dev": "npx ts-node --transpile-only src/server.ts",
-		"build": "npm install",
-		"start": "npx ts-node --transpile-only src/server.ts",
+		"build": "tsc",
+		"build:clean": "rm -rf dist && npm run build",
+		"start": "node dist/server.js",
+		"start:dev": "npx ts-node --transpile-only src/server.ts",
+		"start:prod": "npm run build && npm start",
 		"seed:donations": "npx ts-node --transpile-only src/scripts/seedDonations.ts",
 		"test:donation-flow": "npx ts-node --transpile-only src/scripts/testDonationFlow.ts"
 	},

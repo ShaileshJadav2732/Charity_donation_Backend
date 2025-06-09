@@ -488,7 +488,7 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 		await message.save();
 
 		// Update conversation with last message
-		conversation.lastMessage = message._id;
+		conversation.lastMessage = message._id as any;
 		await conversation.save();
 
 		// Populate conversation data
@@ -671,7 +671,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
 		await message.save();
 
 		// Update conversation
-		conversation.lastMessage = message._id;
+		conversation.lastMessage = message._id as any;
 		conversation.updatedAt = new Date();
 		await conversation.save();
 

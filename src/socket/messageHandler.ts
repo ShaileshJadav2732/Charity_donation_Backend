@@ -136,7 +136,7 @@ export const setupMessageHandlers = (io: Server) => {
 				typingUsers.get(data.conversationId)!.add(socket.userId);
 
 				// Update conversation typing status
-				await conversation.setTypingStatus(socket.userId, true);
+				// await conversation.setTypingStatus(socket.userId, true);
 
 				// Broadcast typing indicator to other participants
 				socket.to(`conversation_${data.conversationId}`).emit("typing:start", {
@@ -176,7 +176,7 @@ export const setupMessageHandlers = (io: Server) => {
 				}
 
 				// Update conversation typing status
-				await conversation.setTypingStatus(socket.userId, false);
+				// await conversation.setTypingStatus(socket.userId, false);
 
 				// Broadcast typing stop to other participants
 				socket.to(`conversation_${data.conversationId}`).emit("typing:stop", {
@@ -267,7 +267,7 @@ export const setupMessageHandlers = (io: Server) => {
 					try {
 						const conversation = await Conversation.findById(conversationId);
 						if (conversation) {
-							await conversation.setTypingStatus(socket.userId, false);
+							// await conversation.setTypingStatus(socket.userId, false);
 						}
 					} catch (error) {
 						console.error("Error updating typing status on disconnect:", error);
