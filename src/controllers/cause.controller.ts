@@ -38,7 +38,6 @@ const calculateRaisedAmount = async (causeId: string): Promise<number> => {
 
 		return result.length > 0 ? result[0].totalAmount || 0 : 0;
 	} catch (error) {
-		console.error("Error calculating raised amount:", error);
 		return 0;
 	}
 };
@@ -122,15 +121,38 @@ export const getCauses = catchAsync(async (req: Request, res: Response) => {
 	const limit = parseInt(req.query.limit as string) || 10;
 	const search = req.query.search as string;
 	const tag = req.query.tag as string;
+	const donationType = req.query.donationType as string;
+	const acceptanceType = req.query.acceptanceType as string;
 
 	const query: any = {};
 
+	// Text search - fallback to regex if text index not available
 	if (search) {
-		query.$text = { $search: search };
+		try {
+			query.$text = { $search: search };
+		} catch (error) {
+			// Fallback to regex search if text index doesn't exist
+			query.$or = [
+				{ title: { $regex: search, $options: "i" } },
+				{ description: { $regex: search, $options: "i" } },
+				{ tags: { $regex: search, $options: "i" } },
+			];
+		}
 	}
 
+	// Tag filtering
 	if (tag) {
-		query.tags = tag;
+		query.tags = { $in: [tag] };
+	}
+
+	// Donation type filtering
+	if (donationType && donationType !== "all") {
+		query.acceptedDonationTypes = { $in: [donationType.toUpperCase()] };
+	}
+
+	// Acceptance type filtering
+	if (acceptanceType && acceptanceType !== "all") {
+		query.acceptanceType = acceptanceType;
 	}
 
 	const skip = (page - 1) * limit;
@@ -210,11 +232,8 @@ export const createCause = catchAsync(
 			throw new AppError("Missing required fields", 400);
 		}
 
-		// Determine the acceptance type to validate targetAmount correctly
 		const finalAcceptanceType = acceptanceType || "money";
 
-		// For money or both acceptance types, targetAmount must be > 0
-		// For items-only, targetAmount can be 0
 		if (finalAcceptanceType !== "items" && targetAmount <= 0) {
 			throw new AppError(
 				"Target amount must be greater than 0 for money-based causes",
@@ -222,12 +241,10 @@ export const createCause = catchAsync(
 			);
 		}
 
-		// For items-only causes, ensure targetAmount is not negative
 		if (finalAcceptanceType === "items" && targetAmount < 0) {
 			throw new AppError("Target amount cannot be negative", 400);
 		}
 
-		// For items or both acceptance types, ensure donation items are provided
 		if (
 			(finalAcceptanceType === "items" || finalAcceptanceType === "both") &&
 			(!donationItems || donationItems.length === 0)
@@ -238,15 +255,12 @@ export const createCause = catchAsync(
 			);
 		}
 
-		//  Find the organization based on the logged-in user's ID
 		const organization = await Organization.findOne({ userId: req.user._id });
 
 		if (!organization) {
 			throw new AppError("Organization not found for the logged-in user", 404);
 		}
 
-		// Use the already determined acceptance type for donation items processing
-		// finalAcceptanceType is already defined above
 		let finalDonationItems = [];
 		let finalAcceptedDonationTypes = ["MONEY"];
 
@@ -345,12 +359,9 @@ export const updateCause = catchAsync(
 
 		const cause = causeId;
 
-		// Validate targetAmount if provided
 		if (targetAmount !== undefined) {
 			const updateAcceptanceType = acceptanceType || cause.acceptanceType;
 
-			// For money or both acceptance types, targetAmount must be > 0
-			// For items-only, targetAmount can be 0
 			if (updateAcceptanceType !== "items" && targetAmount <= 0) {
 				throw new AppError(
 					"Target amount must be greater than 0 for money-based causes",
@@ -358,30 +369,24 @@ export const updateCause = catchAsync(
 				);
 			}
 
-			// For items-only causes, ensure targetAmount is not negative
 			if (updateAcceptanceType === "items" && targetAmount < 0) {
 				throw new AppError("Target amount cannot be negative", 400);
 			}
 		}
 
-		// Process donation-related fields
 		let finalAcceptanceType = acceptanceType;
 		let finalDonationItems = donationItems;
 		let finalAcceptedDonationTypes = acceptedDonationTypes;
 
-		// If acceptanceType is provided, update related fields accordingly
 		if (finalAcceptanceType) {
 			if (finalAcceptanceType === "money") {
-				// For money-only, clear item-related fields
 				finalDonationItems = [];
 				finalAcceptedDonationTypes = ["MONEY"];
 			} else if (
 				finalAcceptanceType === "items" ||
 				finalAcceptanceType === "both"
 			) {
-				// For items or both, ensure we have the right donation types
 				if (finalDonationItems && finalDonationItems.length > 0) {
-					// If donationItems provided but no acceptedDonationTypes, infer them
 					if (
 						!finalAcceptedDonationTypes ||
 						finalAcceptedDonationTypes.length === 0
@@ -492,6 +497,8 @@ export const getOrganizationCauses = catchAsync(
 		const limit = parseInt(req.query.limit as string) || 10;
 		const search = req.query.search as string;
 		const tag = req.query.tag as string;
+		const donationType = req.query.donationType as string;
+		const acceptanceType = req.query.acceptanceType as string;
 
 		if (!mongoose.Types.ObjectId.isValid(organizationId)) {
 			throw new AppError("Invalid organization ID", 400);
@@ -499,12 +506,33 @@ export const getOrganizationCauses = catchAsync(
 
 		const query: any = { organizationId };
 
+		// Text search - fallback to regex if text index not available
 		if (search) {
-			query.$text = { $search: search };
+			try {
+				query.$text = { $search: search };
+			} catch (error) {
+				// Fallback to regex search if text index doesn't exist
+				query.$or = [
+					{ title: { $regex: search, $options: "i" } },
+					{ description: { $regex: search, $options: "i" } },
+					{ tags: { $regex: search, $options: "i" } },
+				];
+			}
 		}
 
+		// Tag filtering
 		if (tag) {
-			query.tags = tag;
+			query.tags = { $in: [tag] };
+		}
+
+		// Donation type filtering
+		if (donationType && donationType !== "all") {
+			query.acceptedDonationTypes = { $in: [donationType.toUpperCase()] };
+		}
+
+		// Acceptance type filtering
+		if (acceptanceType && acceptanceType !== "all") {
+			query.acceptanceType = acceptanceType;
 		}
 
 		const skip = (page - 1) * limit;
@@ -539,6 +567,8 @@ export const getActiveCampaignCauses = catchAsync(
 		const limit = parseInt(req.query.limit as string) || 10;
 		const search = req.query.search as string;
 		const tag = req.query.tag as string;
+		const donationType = req.query.donationType as string;
+		const acceptanceType = req.query.acceptanceType as string;
 
 		try {
 			// First get all active campaigns
@@ -563,12 +593,33 @@ export const getActiveCampaignCauses = catchAsync(
 				_id: { $in: Array.from(activeCausesIds) },
 			};
 
+			// Text search - fallback to regex if text index not available
 			if (search) {
-				query.$text = { $search: search };
+				try {
+					query.$text = { $search: search };
+				} catch (error) {
+					// Fallback to regex search if text index doesn't exist
+					query.$or = [
+						{ title: { $regex: search, $options: "i" } },
+						{ description: { $regex: search, $options: "i" } },
+						{ tags: { $regex: search, $options: "i" } },
+					];
+				}
 			}
 
+			// Tag filtering
 			if (tag) {
-				query.tags = tag;
+				query.tags = { $in: [tag] };
+			}
+
+			// Donation type filtering
+			if (donationType && donationType !== "all") {
+				query.acceptedDonationTypes = { $in: [donationType.toUpperCase()] };
+			}
+
+			// Acceptance type filtering
+			if (acceptanceType && acceptanceType !== "all") {
+				query.acceptanceType = acceptanceType;
 			}
 
 			const skip = (page - 1) * limit;
@@ -609,9 +660,6 @@ export const getOrganizationUserIdByCauseId = catchAsync(
 			throw new AppError("Cause ID is required", 400);
 		}
 
-		console.log("=== GET ORGANIZATION USER ID BY CAUSE ID ===");
-		console.log("Cause ID:", causeId);
-
 		// Find the cause and populate organization
 		const cause = await Cause.findById(causeId).populate(
 			"organizationId",
@@ -637,7 +685,6 @@ export const getOrganizationUserIdByCauseId = catchAsync(
 			organizationName: organization.name,
 			organizationUserId: organization.userId.toString(),
 		});
-		console.log("=======================================");
 
 		res.status(200).json({
 			success: true,

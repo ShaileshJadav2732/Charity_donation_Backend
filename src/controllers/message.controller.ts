@@ -580,12 +580,7 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 						senderName: senderName,
 					},
 				});
-			} catch (notificationError) {
-				console.error(
-					"Failed to send conversation notification:",
-					notificationError
-				);
-			}
+			} catch (notificationError) {}
 		}
 
 		res.status(201).json({

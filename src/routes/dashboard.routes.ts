@@ -8,17 +8,14 @@ import { authorize } from "../middleware/role.middleware";
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(authenticate);
 
-// Get donor dashboard stats
 router.get(
 	"/donor",
 	authorize(["donor"]),
 	getDonorDashboardStats as express.RequestHandler
 );
 
-// Get organization dashboard stats
 router.get(
 	"/organization",
 	authorize(["organization"]),

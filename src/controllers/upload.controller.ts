@@ -92,9 +92,23 @@ export const uploadOrganizationLogo = catchAsync(
 			throw new AppError("Image upload failed - no Cloudinary URL found", 400);
 		}
 
+		// Import Organization model
+		const Organization = require("../models/organization.model").default;
+
+		// Find and update the organization's logo
+		const organization = await Organization.findOne({ userId: req.user.id });
+
+		if (!organization) {
+			throw new AppError("Organization profile not found", 404);
+		}
+
+		// Update the logo field
+		organization.logo = req.cloudinaryUrl;
+		await organization.save();
+
 		res.status(200).json({
 			success: true,
-			message: "Organization logo uploaded successfully",
+			message: "Organization logo uploaded and saved successfully",
 			data: {
 				url: req.cloudinaryUrl,
 				publicId: req.cloudinaryPublicId,

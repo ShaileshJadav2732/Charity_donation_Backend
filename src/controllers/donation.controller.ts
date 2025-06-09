@@ -956,10 +956,9 @@ export const updateDonationStatus = async (req: Request, res: Response) => {
 			donation.amount &&
 			donation.cause
 		) {
-			// Find the cause and update its raisedAmount
-			const causeId = donation.cause;
-			const cause = await Cause.findById(causeId);
 			// Note: raisedAmount is now calculated dynamically, no need to update manually
+			// const causeId = donation.cause;
+			// const cause = await Cause.findById(causeId);
 			// if (cause) {
 			//   cause.raisedAmount += donation.amount;
 			//   await cause.save();
@@ -1051,8 +1050,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		}
 
 		// Check if Cloudinary upload was successful
-		const cloudinaryResult = (req as any).cloudinaryResult;
-		if (!cloudinaryResult) {
+		const cloudinaryUrl = req.cloudinaryUrl;
+		const cloudinaryPublicId = req.cloudinaryPublicId;
+		if (!cloudinaryUrl || !cloudinaryPublicId) {
 			return res.status(400).json({
 				success: false,
 				message: "Photo upload to cloud storage failed",
@@ -1094,7 +1094,7 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 		}
 
 		// Get the Cloudinary URL
-		const photoUrl = cloudinaryResult.url;
+		const photoUrl = cloudinaryUrl;
 
 		// Update donation status and receipt image
 		donation.status = DonationStatus.RECEIVED;
@@ -1102,13 +1102,13 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 
 		// Store photo metadata for better tracking (including Cloudinary info)
 		donation.receiptImageMetadata = {
-			originalName: cloudinaryResult.public_id.split("/").pop() || "unknown",
+			originalName: cloudinaryPublicId.split("/").pop() || "unknown",
 			mimeType: "image/jpeg", // Cloudinary optimizes to JPEG by default
 			fileSize: 0, // Cloudinary doesn't provide file size in response
 			uploadedAt: new Date(),
 			uploadedBy: new mongoose.Types.ObjectId(req.user._id),
-			cloudinaryPublicId: cloudinaryResult.public_id,
-			cloudinaryUrl: cloudinaryResult.url,
+			cloudinaryPublicId: cloudinaryPublicId,
+			cloudinaryUrl: cloudinaryUrl,
 		};
 
 		// If it's a monetary donation, update the cause's raisedAmount
@@ -1117,9 +1117,9 @@ export const markDonationAsReceived = async (req: Request, res: Response) => {
 			donation.amount &&
 			donation.cause
 		) {
-			// Find the cause and update its raisedAmount
-			const causeId = donation.cause;
-			const cause = await Cause.findById(causeId);
+			// Note: raisedAmount is now calculated dynamically, no need to update manually
+			// const causeId = donation.cause;
+			// const cause = await Cause.findById(causeId);
 		}
 
 		// Save the updated donation
@@ -1253,6 +1253,8 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 		// Generate PDF receipt for the donor
 		let pdfReceiptUrl = "";
 		try {
+			console.log(`🔄 Generating PDF receipt for donation ${donationId}...`);
+
 			const donationData = {
 				donationId: donation._id.toString(),
 				donorName: (req.user as any)?.name || "Anonymous Donor",
@@ -1270,9 +1272,14 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 				cause: (donation.cause as any)?.title || undefined,
 			};
 
+			console.log(
+				"📋 Donation data for PDF:",
+				JSON.stringify(donationData, null, 2)
+			);
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
+			console.log(`✅ PDF receipt generated successfully: ${pdfReceiptUrl}`);
 		} catch (pdfError) {
-			console.error("Failed to generate PDF receipt:", pdfError);
+			console.error("❌ Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
 		}
 
@@ -1282,11 +1289,18 @@ export const confirmDonationReceipt = async (req: Request, res: Response) => {
 
 		// Store the PDF receipt URL if generated successfully
 		if (pdfReceiptUrl) {
+			console.log(`💾 Storing PDF receipt URL in database: ${pdfReceiptUrl}`);
 			donation.pdfReceiptUrl = pdfReceiptUrl;
+		} else {
+			console.warn("⚠️  No PDF receipt URL to store");
 		}
 
 		// Save the updated donation
+		console.log(`💾 Saving donation to database...`);
 		await donation.save();
+		console.log(
+			`✅ Donation saved successfully with PDF URL: ${donation.pdfReceiptUrl || "None"}`
+		);
 
 		// Send email notification to donor with receipt
 		let donorEmailStatus = "No email sent to donor";
@@ -1458,6 +1472,10 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		// Generate PDF receipt for the donor
 		let pdfReceiptUrl = "";
 		try {
+			console.log(
+				`🔄 [ORG] Generating PDF receipt for donation ${donationId}...`
+			);
+
 			const donationData = {
 				donationId: donation._id.toString(),
 				donorName: (donation.donor as any)?.name || "Anonymous Donor",
@@ -1475,9 +1493,16 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 				cause: (donation.cause as any)?.title || undefined,
 			};
 
+			console.log(
+				"📋 [ORG] Donation data for PDF:",
+				JSON.stringify(donationData, null, 2)
+			);
 			pdfReceiptUrl = await generateDonationReceipt(donationData);
+			console.log(
+				`✅ [ORG] PDF receipt generated successfully: ${pdfReceiptUrl}`
+			);
 		} catch (pdfError) {
-			console.error("Failed to generate PDF receipt:", pdfError);
+			console.error("❌ [ORG] Failed to generate PDF receipt:", pdfError);
 			// Continue with the process even if PDF generation fails
 		}
 
@@ -1487,7 +1512,12 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 
 		// Store the PDF receipt URL if generated successfully
 		if (pdfReceiptUrl) {
+			console.log(
+				`💾 [ORG] Storing PDF receipt URL in database: ${pdfReceiptUrl}`
+			);
 			donation.pdfReceiptUrl = pdfReceiptUrl;
+		} else {
+			console.warn("⚠️  [ORG] No PDF receipt URL to store");
 		}
 
 		// Update receipt metadata for confirmation
@@ -1500,7 +1530,11 @@ export const markDonationAsConfirmed = async (req: Request, res: Response) => {
 		);
 
 		// Save the updated donation
+		console.log(`💾 [ORG] Saving donation to database...`);
 		await donation.save();
+		console.log(
+			`✅ [ORG] Donation saved successfully with PDF URL: ${donation.pdfReceiptUrl || "None"}`
+		);
 
 		// Send email notification to donor with PDF receipt
 		let emailStatus = "No email sent";

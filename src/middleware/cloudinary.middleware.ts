@@ -127,8 +127,6 @@ const createCloudinaryUploadMiddleware = (
 
 			upload(req, res, async (err) => {
 				if (err) {
-					console.error(`❌ Multer error in ${folder} upload:`, err);
-
 					// Handle specific multer errors
 					if (err instanceof multer.MulterError) {
 						if (err.code === "LIMIT_FILE_SIZE") {
@@ -173,15 +171,6 @@ const createCloudinaryUploadMiddleware = (
 				}
 
 				try {
-					console.log(`📤 Uploading ${folder} to Cloudinary...`);
-					console.log(`📊 File info:`, {
-						fieldName,
-						originalName: req.file.originalname,
-						mimeType: req.file.mimetype,
-						size: req.file.size,
-						bufferLength: req.file.buffer.length,
-					});
-
 					// Upload to Cloudinary
 					const result = await uploadBufferToCloudinary(
 						req.file.buffer,
@@ -189,24 +178,12 @@ const createCloudinaryUploadMiddleware = (
 						transformations
 					);
 
-					console.log(`✅ ${folder} uploaded to Cloudinary:`, {
-						url: result.secure_url,
-						publicId: result.public_id,
-						format: result.format,
-						width: result.width,
-						height: result.height,
-					});
-
 					// Add Cloudinary URL to request for controller to use
 					req.cloudinaryUrl = result.secure_url;
 					req.cloudinaryPublicId = result.public_id;
 
 					next();
 				} catch (uploadError) {
-					console.error(
-						`❌ Cloudinary upload error for ${folder}:`,
-						uploadError
-					);
 					return res.status(500).json({
 						success: false,
 						message: `Failed to upload ${folder} to cloud storage`,
@@ -216,7 +193,6 @@ const createCloudinaryUploadMiddleware = (
 				}
 			});
 		} catch (error) {
-			console.error(`❌ ${folder} upload middleware error:`, error);
 			return res.status(500).json({
 				success: false,
 				message: "Internal server error during file upload",
@@ -299,5 +275,5 @@ export const uploadReceiptToCloudinary = createCloudinaryUploadMiddleware(
 	}
 );
 
-// Export the upload function for other uses
+// Export the existing uploadBufferToCloudinary function
 export { uploadBufferToCloudinary };

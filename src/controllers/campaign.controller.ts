@@ -75,7 +75,6 @@ const calculateCampaignTotals = async (campaignId: string) => {
 			totalSupporters: uniqueDonors.length,
 		};
 	} catch (error) {
-		console.error("Error calculating campaign totals:", error);
 		return { totalRaisedAmount: 0, totalItemDonations: 0, totalSupporters: 0 };
 	}
 };

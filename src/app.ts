@@ -40,7 +40,6 @@ app.use(
 		exposedHeaders: ["Content-Disposition"],
 	})
 );
-app.use(authenticate);
 
 app.post(
 	"/api/payments/webhook",
@@ -63,7 +62,6 @@ app.use((req: any, res, next) => {
 	}
 	next();
 });
-
 // Routes
 app.use("/api/auth", authRoutes);
 

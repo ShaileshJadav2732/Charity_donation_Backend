@@ -69,16 +69,11 @@ async function cleanupProfileImages() {
 		);
 
 		for (const profile of donorProfiles) {
-			console.log(
-				`Cleaning up donor profile: ${profile._id}, old image: ${profile.profileImage}`
-			);
-
 			// Clear the legacy local file path
 			profile.profileImage = undefined;
 			profile.cloudinaryPublicId = undefined;
 
 			await profile.save();
-			console.log(`✅ Cleaned up donor profile: ${profile._id}`);
 		}
 
 		// Find and update organization profiles with legacy local image paths
@@ -104,19 +99,11 @@ async function cleanupProfileImages() {
 			profile.cloudinaryPublicId = undefined;
 
 			await profile.save();
-			console.log(`✅ Cleaned up organization profile: ${profile._id}`);
 		}
-
-		console.log("🎉 Profile image cleanup completed successfully!");
-		console.log("All legacy local file paths have been removed.");
-		console.log(
-			"Users will need to re-upload their profile images to Cloudinary."
-		);
 	} catch (error) {
-		console.error("❌ Error during cleanup:", error);
 	} finally {
 		await mongoose.disconnect();
-		console.log("Disconnected from MongoDB");
+
 		process.exit(0);
 	}
 }

@@ -18,15 +18,10 @@ import { authenticate } from "../middleware/auth.middleware";
 
 const router = express.Router();
 
-// Universal participant ID resolver (no auth needed)
 router.get("/resolve-participant/:id", resolveParticipantId);
 
-// Get User IDs by role for testing (no auth needed)
 router.get("/users/:role", getUserIdsByRole);
 
-// File upload configuration removed for simplicity
-
-// Apply authentication middleware to all routes
 router.use(authenticate);
 
 // Conversation routes (no file upload needed)

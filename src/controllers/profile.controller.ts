@@ -1,7 +1,7 @@
 import { Response } from "express";
 import User from "../models/user.model";
 import DonorProfile from "../models/donor.model";
-import OrganizationProfile from "../models/organization.model";
+import Organization from "../models/organization.model";
 import { AuthRequest } from "../types";
 
 // Complete donor profile
@@ -131,7 +131,7 @@ export const completeOrganizationProfile = async (
 		}
 
 		// Check if profile already exists
-		let orgProfile = await OrganizationProfile.findOne({ userId: req.user.id });
+		let orgProfile = await Organization.findOne({ userId: req.user.id });
 
 		if (orgProfile) {
 			// Update existing profile
@@ -146,7 +146,7 @@ export const completeOrganizationProfile = async (
 			orgProfile.country = country;
 		} else {
 			// Create new profile
-			orgProfile = new OrganizationProfile({
+			orgProfile = new Organization({
 				userId: req.user.id,
 				name,
 				description,
@@ -189,10 +189,6 @@ export const getDonorProfile = async (req: AuthRequest, res: Response) => {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
-		console.log(
-			"📋 Fetching donor profile - Cover Image:",
-			donorProfile.coverImage
-		);
 		return res.status(200).json({ profile: donorProfile });
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });
@@ -209,7 +205,7 @@ export const getOrganizationProfile = async (
 			return res.status(401).json({ message: "Unauthorized" });
 		}
 
-		const orgProfile = await OrganizationProfile.findOne({
+		const orgProfile = await Organization.findOne({
 			userId: req.user.id,
 		});
 
@@ -219,13 +215,11 @@ export const getOrganizationProfile = async (
 				.json({ message: "Organization profile not found" });
 		}
 
-		console.log(
-			"📋 Fetching organization profile - Cover Image:",
-			orgProfile.coverImage
-		);
 		return res.status(200).json({ profile: orgProfile });
 	} catch (error) {
-		return res.status(500).json({ message: "Server error" });
+		return res
+			.status(500)
+			.json({ message: "Server error", error: error.message });
 	}
 };
 
@@ -285,7 +279,6 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			profile: donorProfile,
 		});
 	} catch (error) {
-		console.error("Update donor profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -313,7 +306,7 @@ export const updateOrganizationProfile = async (
 		}
 
 		// Find organization profile
-		const orgProfile = await OrganizationProfile.findOne({
+		const orgProfile = await Organization.findOne({
 			userId: req.user.id,
 		});
 		if (!orgProfile) {
@@ -355,7 +348,6 @@ export const updateOrganizationProfile = async (
 			profile: orgProfile,
 		});
 	} catch (error) {
-		console.error("Update organization profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
@@ -398,12 +390,6 @@ export const uploadDonorProfileImage = async (
 		donorProfile.profileImage = req.cloudinaryUrl;
 		donorProfile.cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
 		await donorProfile.save();
-
-		console.log("✅ Profile image updated successfully:", {
-			userId: req.user.id,
-			cloudinaryUrl: req.cloudinaryUrl,
-			publicId: req.cloudinaryPublicId,
-		});
 
 		return res.status(200).json({
 			success: true,

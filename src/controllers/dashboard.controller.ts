@@ -747,7 +747,7 @@ export const getOrganizationDashboardStats = async (
 			},
 		});
 	} catch (error: any) {
-		console.error("Dashboard error:", error);
+	
 		res.status(500).json({
 			success: false,
 			error: "Failed to fetch dashboard data",

@@ -13,12 +13,13 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 
 const router = express.Router();
-router.use(authenticate);
-// Public routes
+
+// Public routes (no authentication required)
 router.get("/", getCauses);
 router.get("/active-campaigns", getActiveCampaignCauses);
+router.get("/:id", getCauseById);
 
-// Get organization User ID by cause ID for messaging (authenticated users only)
+// Protected routes - Authenticated users only
 router.get(
 	"/:causeId/organization-user-id",
 	authenticate,
@@ -33,8 +34,6 @@ router.get(
 	authorize(["organization"]),
 	getOrganizationCauses
 );
-// Make cause details accessible to all authenticated users
-router.get("/:id", getCauseById);
 router.put("/:id", authenticate, authorize(["organization"]), updateCause);
 router.delete(
 	"/:causeId",
