@@ -69,7 +69,7 @@ export const generateDonationReceipt = async (
 			// Organization Info
 			doc
 				.fontSize(16)
-				.fillColor("#374151")
+				.fillColor("#2c5625")
 				.text("GreenGive Platform", 50, 100, { align: "center" })
 				.fontSize(12)
 				.text("Connecting Hearts, Creating Change", 50, 120, {
@@ -262,7 +262,7 @@ export const generateDonationConfirmationReceipt = async (
 			// Organization Info
 			doc
 				.fontSize(16)
-				.fillColor("#374151")
+				.fillColor("#2c5658")
 				.text("GreenGive Platform", 50, 100, { align: "center" })
 				.fontSize(12)
 				.text("Connecting Hearts, Creating Change", 50, 120, {
