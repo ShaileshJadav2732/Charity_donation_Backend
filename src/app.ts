@@ -14,6 +14,7 @@ import donationRoutes from "./routes/donation.routes";
 import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
 import uploadRoutes from "./routes/upload.routes";
+import voiceCommandRoutes from "./routes/voiceCommand.routes";
 import { NotificationService } from "./services/notificationService";
 import { handleStripeWebhook } from "./controllers/payment.controller";
 import { authenticate } from "middleware/auth.middleware";
@@ -76,6 +77,7 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/organizations", organizationRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/voice-commands", voiceCommandRoutes);
 
 // Health check route
 app.get("/health", (req: Request, res: Response) => {
