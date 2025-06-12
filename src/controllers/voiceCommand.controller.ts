@@ -142,10 +142,14 @@ export const testVoiceCommand = async (req: Request, res: Response) => {
 			isValid: voiceService.validateCommand(command),
 			suggestions: voiceService.getSuggestions(command),
 			confidence: command.confidence,
-			confidenceLevel: 
-				command.confidence >= 0.8 ? "High" :
-				command.confidence >= 0.6 ? "Medium" :
-				command.confidence >= 0.4 ? "Low" : "Very Low",
+			confidenceLevel:
+				command.confidence >= 0.8
+					? "High"
+					: command.confidence >= 0.6
+						? "Medium"
+						: command.confidence >= 0.4
+							? "Low"
+							: "Very Low",
 		};
 
 		res.status(200).json({
