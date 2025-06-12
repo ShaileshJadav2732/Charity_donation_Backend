@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Notification from "../models/notification.model"; // Adjust path
+import Notification from "../models/notification.model";
 import { IUser } from "types";
 
 interface AuthUser extends IUser {

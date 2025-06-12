@@ -588,23 +588,32 @@ export const getActiveCampaignCauses = catchAsync(
 				}
 			});
 
-			// Build query for causes
+			// Convert to ObjectId array for MongoDB query
+			const activeCauseObjectIds = Array.from(activeCausesIds).map(
+				(id) => new mongoose.Types.ObjectId(id)
+			);
+
+			// Build query for causes - FIXED VERSION
 			const query: any = {
-				_id: { $in: Array.from(activeCausesIds) },
+				_id: { $in: activeCauseObjectIds },
 			};
 
-			// Text search - fallback to regex if text index not available
+			// Text search - FIXED: Combine with existing _id filter
 			if (search) {
-				try {
-					query.$text = { $search: search };
-				} catch (error) {
-					// Fallback to regex search if text index doesn't exist
-					query.$or = [
-						{ title: { $regex: search, $options: "i" } },
-						{ description: { $regex: search, $options: "i" } },
-						{ tags: { $regex: search, $options: "i" } },
-					];
-				}
+				const searchConditions = [
+					{ title: { $regex: search, $options: "i" } },
+					{ description: { $regex: search, $options: "i" } },
+					{ tags: { $regex: search, $options: "i" } },
+				];
+
+				// Combine search with the _id filter using $and
+				query.$and = [
+					{ _id: { $in: activeCauseObjectIds } },
+					{ $or: searchConditions },
+				];
+
+				// Remove the original _id filter since it's now in $and
+				delete query._id;
 			}
 
 			// Tag filtering
@@ -646,6 +655,7 @@ export const getActiveCampaignCauses = catchAsync(
 				limit,
 			});
 		} catch (error) {
+			console.error("Error in getActiveCampaignCauses:", error);
 			throw new AppError("Error fetching active campaign causes", 500);
 		}
 	}
