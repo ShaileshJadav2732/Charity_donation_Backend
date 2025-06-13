@@ -7,6 +7,8 @@ import {
 	getCampaignDetailsWithDonations,
 	getCampaigns,
 	updateCampaign,
+	addCauseToCampaign,
+	removeCauseFromCampaign,
 } from "../controllers/campaign.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
@@ -29,5 +31,17 @@ router.use(authenticate);
 router.post("/", authorize(["organization"]), createCampaign);
 router.patch("/:campaignId", authorize(["organization"]), updateCampaign);
 router.delete("/:campaignId", authorize(["organization"]), deleteCampaign);
+
+// Cause management routes
+router.post(
+	"/:campaignId/causes",
+	authorize(["organization"]),
+	addCauseToCampaign
+);
+router.delete(
+	"/:campaignId/causes/:causeId",
+	authorize(["organization"]),
+	removeCauseFromCampaign
+);
 
 export default router;
