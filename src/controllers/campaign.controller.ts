@@ -1,13 +1,12 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Campaign, { ICampaign } from "../models/campaign.model";
+import Campaign from "../models/campaign.model";
 import Cause from "../models/cause.model";
-import Organization from "../models/organization.model";
 import Donation, { DonationType } from "../models/donation.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
-
+import { ICampaign } from "types/campaign";
 interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }

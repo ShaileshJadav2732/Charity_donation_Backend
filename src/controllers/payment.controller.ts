@@ -58,9 +58,7 @@ const sendWebhookNotifications = async (
 				organizationData.email,
 				donation._id.toString(),
 				DonationStatus.APPROVED,
-				amount,
-				undefined,
-				undefined
+				amount
 			);
 		}
 	} catch (error) {

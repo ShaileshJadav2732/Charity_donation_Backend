@@ -1,23 +1,23 @@
-import express, { Application, Request, Response } from "express";
 import cors from "cors";
-import morgan from "morgan";
 import dotenv from "dotenv";
+import express, { Application, Request, Response } from "express";
+import morgan from "morgan";
 import connectDB from "./config/db.config";
+import { handleStripeWebhook } from "./controllers/payment.controller";
 import authRoutes from "./routes/auth.routes";
-import profileRoutes from "./routes/profile.routes";
-import dashboardRoutes from "./routes/dashboard.routes";
-import causeRoutes from "./routes/cause.routes";
 import campaignRoutes from "./routes/campaign.routes";
-import notificationRoutes from "./routes/notification.routes";
-import messageRoutes from "./routes/message.routes";
+import causeRoutes from "./routes/cause.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 import donationRoutes from "./routes/donation.routes";
+import messageRoutes from "./routes/message.routes";
+import notificationRoutes from "./routes/notification.routes";
 import organizationRoutes from "./routes/organization.routes";
 import paymentRoutes from "./routes/payment.routes";
+import profileRoutes from "./routes/profile.routes";
 import uploadRoutes from "./routes/upload.routes";
 import voiceCommandRoutes from "./routes/voiceCommand.routes";
-import { NotificationService } from "./services/notificationService";
-import { handleStripeWebhook } from "./controllers/payment.controller";
-import { authenticate } from "middleware/auth.middleware";
+
+import { attachNotificationService } from "./middleware/notification.middleware";
 
 dotenv.config();
 const app: Application = express();
@@ -56,13 +56,8 @@ app.use(morgan("dev"));
 app.use("/api/messages", messageRoutes);
 
 // Middleware to attach notification service to requests
-app.use((req: any, res, next) => {
-	const io = app.get("io");
-	if (io) {
-		req.notificationService = new NotificationService(io);
-	}
-	next();
-});
+app.use(attachNotificationService);
+
 // Routes
 app.use("/api/auth", authRoutes);
 
@@ -84,9 +79,9 @@ app.get("/health", (req: Request, res: Response) => {
 	res.status(200).json({ status: "ok", message: "Server is running" });
 });
 
-// Error handling middleware
-app.use((err: any, req: Request, res: Response, next: Function) => {
-	console.error("Error:", err);
-});
+// // Error handling middleware
+// app.use((err: any, req: Request, res: Response, next: Function) => {
+// 	console.error("Error:", err);
+// });
 
 export default app;

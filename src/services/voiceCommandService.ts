@@ -50,11 +50,7 @@ export class VoiceCommandService {
 		return VoiceCommandService.instance;
 	}
 
-	/**
-	 * Process voice command text using ONLY AI (Groq Cloud)
-	 */
 	public async processVoiceCommand(text: string): Promise<VoiceCommand> {
-		// Check if Groq API key is configured
 		if (!process.env.GROQ_API_KEY) {
 			throw new Error(
 				"Groq API key is required for voice command processing. Please configure GROQ_API_KEY in environment variables."
@@ -62,7 +58,6 @@ export class VoiceCommandService {
 		}
 
 		try {
-			// Use ONLY AI processing - no manual parsing
 			const aiCommand = await this.processWithAI(text);
 			return { ...aiCommand, originalText: text };
 		} catch (error) {
@@ -73,10 +68,6 @@ export class VoiceCommandService {
 		}
 	}
 
-	/**
-	 * Process with AI service (Groq Cloud integration)
-	 * Uses Groq's fast LLM models for voice command parsing
-	 */
 	private async processWithAI(
 		text: string
 	): Promise<Omit<VoiceCommand, "originalText">> {
@@ -197,7 +188,7 @@ Complete form filling:
 `;
 
 			const response = await this.groq.chat.completions.create({
-				model: "llama-3.1-70b-versatile", // Fast and accurate Groq model
+				model: "llama-3.1-70b-versatile",
 				messages: [
 					{
 						role: "system",
@@ -210,7 +201,7 @@ Complete form filling:
 					},
 				],
 				temperature: 0.1,
-				max_tokens: 500, // Increased for comprehensive form data
+				max_tokens: 1000, // Increased for comprehensive form data
 			});
 
 			const aiResponse = response.choices[0]?.message?.content?.trim();
@@ -234,9 +225,6 @@ Complete form filling:
 		}
 	}
 
-	/**
-	 * Validate AI response structure
-	 */
 	private validateAIResponse(response: any): boolean {
 		if (!response || typeof response !== "object") {
 			return false;
@@ -347,9 +335,6 @@ Complete form filling:
 		return false;
 	}
 
-	/**
-	 * Get suggested improvements for low-confidence commands
-	 */
 	public getSuggestions(command: VoiceCommand): string[] {
 		const suggestions: string[] = [];
 

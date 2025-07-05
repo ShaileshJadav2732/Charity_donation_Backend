@@ -182,13 +182,10 @@ export const getDonorProfile = async (req: AuthRequest, res: Response) => {
 		if (!req.user) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
-
 		const donorProfile = await DonorProfile.findOne({ userId: req.user.id });
-
 		if (!donorProfile) {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
-
 		return res.status(200).json({ profile: donorProfile });
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });
@@ -204,17 +201,14 @@ export const getOrganizationProfile = async (
 		if (!req.user) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
-
 		const orgProfile = await Organization.findOne({
 			userId: req.user.id,
 		});
-
 		if (!orgProfile) {
 			return res
 				.status(404)
 				.json({ message: "Organization profile not found" });
 		}
-
 		return res.status(200).json({ profile: orgProfile });
 	} catch (error) {
 		return res
@@ -248,7 +242,6 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
-		// Update profile fields that are provided (only allowed fields)
 		const {
 			firstName,
 			lastName,
@@ -261,16 +254,23 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			profileImage,
 		} = req.body;
 
-		// Update only the fields that are provided and valid
-		if (firstName !== undefined) donorProfile.firstName = firstName;
-		if (lastName !== undefined) donorProfile.lastName = lastName;
-		if (phoneNumber !== undefined) donorProfile.phoneNumber = phoneNumber;
-		if (address !== undefined) donorProfile.address = address;
-		if (city !== undefined) donorProfile.city = city;
-		if (state !== undefined) donorProfile.state = state;
-		if (country !== undefined) donorProfile.country = country;
-		if (bio !== undefined) donorProfile.bio = bio;
-		if (profileImage !== undefined) donorProfile.profileImage = profileImage;
+		const updates = {
+			firstName,
+			lastName,
+			phoneNumber,
+			address,
+			city,
+			state,
+			country,
+			bio,
+			profileImage,
+		};
+
+		for (const [key, value] of Object.entries(updates)) {
+			if (value !== undefined) {
+				(donorProfile as any)[key] = value;
+			}
+		}
 
 		await donorProfile.save();
 
@@ -329,17 +329,24 @@ export const updateOrganizationProfile = async (
 			logo,
 		} = req.body;
 
-		// Update only the fields that are provided and valid
-		if (name !== undefined) orgProfile.name = name;
-		if (description !== undefined) orgProfile.description = description;
-		if (phoneNumber !== undefined) orgProfile.phoneNumber = phoneNumber;
-		if (email !== undefined) orgProfile.email = email;
-		if (website !== undefined) orgProfile.website = website;
-		if (address !== undefined) orgProfile.address = address;
-		if (city !== undefined) orgProfile.city = city;
-		if (state !== undefined) orgProfile.state = state;
-		if (country !== undefined) orgProfile.country = country;
-		if (logo !== undefined) orgProfile.logo = logo;
+		const updates = {
+			name,
+			description,
+			phoneNumber,
+			email,
+			website,
+			address,
+			city,
+			state,
+			country,
+			logo,
+		};
+
+		for (const [key, value] of Object.entries(updates)) {
+			if (value !== undefined) {
+				(orgProfile as any)[key] = value;
+			}
+		}
 
 		await orgProfile.save();
 

@@ -1,21 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { DonationType } from "./donation.model";
-
-export interface ICause extends Document {
-	title: string;
-	description: string;
-	targetAmount: number;
-	// raisedAmount removed - calculated dynamically from donations
-	imageUrl: string;
-	tags: string[];
-	organizationId: mongoose.Types.ObjectId;
-	acceptanceType: "money" | "items" | "both";
-	donationItems: string[];
-	acceptedDonationTypes: DonationType[];
-	createdAt: Date;
-	updatedAt: Date;
-}
-
+import { ICause } from "types/cause";
 const CauseSchema: Schema = new Schema(
 	{
 		title: {
@@ -33,7 +17,7 @@ const CauseSchema: Schema = new Schema(
 			required: [true, "Target amount is required"],
 			min: [0, "Target amount cannot be negative"],
 		},
-		// raisedAmount field removed - calculated dynamically from donations
+
 		imageUrl: {
 			type: String,
 			required: [true, "Image URL is required"],

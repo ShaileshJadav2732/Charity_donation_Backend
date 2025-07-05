@@ -1,16 +1,7 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import mongoose from "mongoose";
+import { AuthRequest } from "types/notification";
 import Notification from "../models/notification.model";
-import { IUser } from "types";
-
-interface AuthUser extends IUser {
-	id: string;
-}
-
-interface AuthRequest extends Request {
-	user?: AuthUser;
-}
-
 // Get notifications for a user
 export const getNotifications = async (
 	req: AuthRequest & {

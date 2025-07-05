@@ -59,7 +59,6 @@ export const deleteImage = catchAsync(
 	}
 );
 
-// Upload campaign image to Cloudinary (image already uploaded by middleware)
 export const uploadCampaignImage = catchAsync(
 	async (req: AuthRequest, res: Response) => {
 		if (!req.user) {

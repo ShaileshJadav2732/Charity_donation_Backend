@@ -605,10 +605,13 @@ export const getActiveCampaignCauses = catchAsync(
 		const acceptanceType = req.query.acceptanceType as string;
 
 		try {
-			// First get all active campaigns
-			const activeCampaigns = await Campaign.find({ status: "active" }).select(
-				"_id causes"
-			);
+			// First get all active campaigns that are currently running
+			const now = new Date();
+			const activeCampaigns = await Campaign.find({
+				status: "active",
+				startDate: { $lte: now },
+				endDate: { $gte: now },
+			}).select("_id causes");
 
 			// Extract all cause IDs from active campaigns
 			const activeCausesIds = new Set<string>();

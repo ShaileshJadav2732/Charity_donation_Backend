@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { setupSocketIO } from "./socket/socketHandler";
+
 dotenv.config();
 
 const PORT = process.env.PORT || 8080;

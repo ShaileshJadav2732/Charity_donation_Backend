@@ -1,25 +1,7 @@
 // backend/models/campaign.model.ts
 import mongoose, { Schema, Document } from "mongoose";
 import { DonationType } from "./donation.model";
-
-export interface ICampaign extends Document {
-	title: string;
-	description: string;
-	startDate: Date;
-	endDate: Date;
-	status: "draft" | "active" | "completed" | "cancelled";
-	causes: mongoose.Types.ObjectId[];
-	organizations: mongoose.Types.ObjectId[];
-	totalTargetAmount: number;
-	// totalRaisedAmount removed - calculated dynamically from donations
-	// totalSupporters removed - calculated dynamically from donations
-	imageUrl: string;
-	tags: string[];
-	acceptedDonationTypes: DonationType[];
-	createdAt: Date;
-	updatedAt: Date;
-}
-
+import { ICampaign } from "types/campaign";
 const CampaignSchema: Schema = new Schema(
 	{
 		title: {
@@ -63,8 +45,7 @@ const CampaignSchema: Schema = new Schema(
 			required: [true, "Target amount is required"],
 			min: [0, "Target amount cannot be negative"],
 		},
-		// totalRaisedAmount field removed - calculated dynamically from donations
-		// totalSupporters field removed - calculated dynamically from donations
+
 		imageUrl: {
 			type: String,
 			required: [true, "Image URL is required"],

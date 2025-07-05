@@ -10,7 +10,7 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorize } from "../middleware/role.middleware";
 const router = express.Router();
 router.use(authenticate);
-// Public routes
+
 router.get("/me", authorize(["organization"]), getCurrentOrganization);
 router.get("/donors", authorize(["organization"]), getOrganizationDonors);
 router.get("/:organizationId/campaigns", getOrganizationCampaigns);

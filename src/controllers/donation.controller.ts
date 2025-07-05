@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Cause from "../models/cause.model";
+
 import Donation, {
 	DonationStatus,
 	DonationType,
