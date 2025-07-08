@@ -137,8 +137,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 
 	const query: any = {};
 
-	// Log query parameters for debugging
-
 	// Handle text search
 	if (search) {
 		query.$text = { $search: search as string };
