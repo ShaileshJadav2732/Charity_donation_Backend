@@ -1,4 +1,4 @@
-import { DonationType } from "../models/donation.model";
+import { DonationType } from "types";
 export interface OrganizationResponse {
 	id: string;
 	userId: string;

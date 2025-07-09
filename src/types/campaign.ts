@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { DonationType } from "../models/donation.model";
+import { DonationType } from "types";
 
 export interface ICampaign extends Document {
 	title: string;
@@ -10,8 +10,6 @@ export interface ICampaign extends Document {
 	causes: mongoose.Types.ObjectId[];
 	organizations: mongoose.Types.ObjectId[];
 	totalTargetAmount: number;
-	// totalRaisedAmount removed - calculated dynamically from donations
-	// totalSupporters removed - calculated dynamically from donations
 	imageUrl: string;
 	tags: string[];
 	acceptedDonationTypes: DonationType[];

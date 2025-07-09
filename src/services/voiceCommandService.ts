@@ -1,37 +1,5 @@
-import { DonationType } from "../models/donation.model";
 import Groq from "groq-sdk";
-
-export interface VoiceCommand {
-	type: "MONEY" | "ITEMS";
-	amount?: number;
-	itemType?: DonationType;
-	quantity?: number;
-	unit?: string;
-	description?: string;
-	confidence: number;
-	originalText: string;
-
-	// Contact Information
-	contactPhone?: string;
-	contactEmail?: string;
-	donorName?: string;
-
-	// Address Information
-	address?: {
-		street?: string;
-		city?: string;
-		state?: string;
-		zipCode?: string;
-		country?: string;
-	};
-
-	// Delivery/Pickup Information
-	isPickup?: boolean;
-	scheduledDate?: string;
-	scheduledTime?: string;
-	deliveryInstructions?: string;
-}
-
+import { VoiceCommand } from "../types/donation";
 export class VoiceCommandService {
 	private static instance: VoiceCommandService;
 	private groq: Groq;

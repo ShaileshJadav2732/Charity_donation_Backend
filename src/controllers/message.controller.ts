@@ -4,10 +4,9 @@ import Conversation from "../models/conversation.model";
 import User from "../models/user.model";
 import DonorProfile from "../models/donor.model";
 import Organization from "../models/organization.model";
-
 import { AuthRequest } from "../types";
 import { NotificationService } from "../services/notificationService";
-import { NotificationType } from "../models/notification.model";
+import { NotificationType } from "../types/notification";
 
 // Get all conversations for the current user
 export const getConversations = async (req: AuthRequest, res: Response) => {

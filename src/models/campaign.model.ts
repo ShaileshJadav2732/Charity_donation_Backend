@@ -1,7 +1,19 @@
 // backend/models/campaign.model.ts
 import mongoose, { Schema, Document } from "mongoose";
-import { DonationType } from "./donation.model";
+
 import { ICampaign } from "types/campaign";
+
+enum DonationType {
+	MONEY = "MONEY",
+	CLOTHES = "CLOTHES",
+	BLOOD = "BLOOD",
+	FOOD = "FOOD",
+	TOYS = "TOYS",
+	BOOKS = "BOOKS",
+	FURNITURE = "FURNITURE",
+	HOUSEHOLD = "HOUSEHOLD",
+	OTHER = "OTHER",
+}
 const CampaignSchema: Schema = new Schema(
 	{
 		title: {

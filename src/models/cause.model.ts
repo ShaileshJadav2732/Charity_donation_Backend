@@ -1,5 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
-import { ICause } from "types/cause";
+import mongoose, { Schema } from "mongoose";
+import { ICause } from "../types/cause";
 const CauseSchema: Schema = new Schema(
 	{
 		title: {

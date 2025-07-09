@@ -1,4 +1,4 @@
-import { DonationType } from "../models/donation.model";
+import { DonationType } from "types";
 import mongoose from "mongoose";
 export interface Cause {
 	id: string;

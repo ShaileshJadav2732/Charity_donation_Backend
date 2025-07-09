@@ -3,17 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/user.model";
 import Conversation from "../models/conversation.model";
 import Message from "../models/message.model";
-
-interface AuthenticatedSocket extends Socket {
-	userId?: string;
-	userRole?: string;
-}
-
-interface JwtPayload {
-	id: string;
-	role: string;
-}
-
+import { AuthenticatedSocket, JwtPayload } from "../types/message";
 // Store connected users
 const connectedUsers = new Map<string, string>(); // userId -> socketId
 

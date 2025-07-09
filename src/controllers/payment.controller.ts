@@ -1,13 +1,12 @@
 import { Request, Response } from "express";
 import Stripe from "stripe";
 import Cause from "../models/cause.model";
-import Donation, {
-	DonationStatus,
-	DonationType,
-} from "../models/donation.model";
-import { NotificationType } from "../models/notification.model";
+import Donation from "../models/donation.model";
+import { NotificationType } from "../types/notification";
 import { NotificationService } from "../services/notificationService";
 import { sendEmail } from "../utils/email";
+import { DonationStatus, DonationType } from "../types";
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 	apiVersion: "2023-10-16",
 });
@@ -48,7 +47,7 @@ const sendWebhookNotifications = async (
 					amount: amount,
 					donorName: `${donorData.firstName} ${donorData.lastName}`,
 					causeName: causeData?.title,
-					status: DonationStatus.APPROVED,
+					status: DonationStatus.CONFIRMED,
 					paymentConfirmed: true,
 				},
 			});
@@ -76,7 +75,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 			sig,
 			process.env.STRIPE_WEBHOOK_SECRET
 		);
-		console.log(req.body);
+		console.log("---------------", req.body);
 	} catch (err) {
 		console.error("Webhook signature verification failed.", err);
 		return res.sendStatus(400);
@@ -108,6 +107,15 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 				await existingDonation.save();
 				donation = existingDonation;
 			} else {
+				console.log("Creating new donation with data:", {
+					donor: donorId,
+					organization: organizationId,
+					campaign: campaignId || undefined,
+					cause: causeId,
+					amount,
+					paymentIntentId,
+				});
+
 				//  Create new donation
 				donation = await Donation.create({
 					donor: donorId,
@@ -124,7 +132,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 					paymentStatus,
 					isPickup: false,
 				});
-
+				console.log("_++_+_+_+__+_+_+_+_+_", donation);
 				// Update cause raised amount
 				if (causeId && amount) {
 					const cause = await Cause.findById(causeId);
@@ -183,7 +191,7 @@ export const checkoutSession = async (req: Request, res: Response) => {
 					quantity: 1,
 				},
 			],
-			success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/donations`,
+			success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/donations?payment=success`,
 			cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/donations?payment=cancelled`,
 			metadata: {
 				organizationId,

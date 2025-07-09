@@ -1,9 +1,6 @@
-import { Request, Response } from "express";
+import { Response } from "express";
 import mongoose from "mongoose";
-import Donation, {
-	DonationStatus,
-	DonationType,
-} from "../models/donation.model";
+import Donation from "../models/donation.model";
 import Organization from "../models/organization.model";
 import Campaign from "../models/campaign.model";
 import Cause from "../models/cause.model";
@@ -14,7 +11,7 @@ import {
 	CampaignStats,
 	CauseStats,
 } from "../types/dashboard";
-
+import { DonationStatus, DonationType } from "../types";
 // Helper functions
 const calculateGrowthPercentage = (
 	current: number,

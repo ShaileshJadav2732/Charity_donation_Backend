@@ -1,25 +1,9 @@
-import { Server, Socket } from "socket.io";
+import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model";
 import Conversation from "../models/conversation.model";
 import Message from "../models/message.model";
-
-interface AuthenticatedSocket extends Socket {
-	userId?: string;
-	userRole?: string;
-}
-
-interface TypingData {
-	conversationId: string;
-	userId: string;
-	userName: string;
-	isTyping: boolean;
-}
-
-interface JoinConversationData {
-	conversationId: string;
-}
-
+import { AuthenticatedSocket, TypingData } from "../types/message";
 // Store online users
 const onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
 
@@ -174,9 +158,6 @@ export const setupMessageHandlers = (io: Server) => {
 						typingUsers.delete(data.conversationId);
 					}
 				}
-
-				// Update conversation typing status
-				// await conversation.setTypingStatus(socket.userId, false);
 
 				// Broadcast typing stop to other participants
 				socket.to(`conversation_${data.conversationId}`).emit("typing:stop", {

@@ -1,18 +1,11 @@
 import { Server } from "socket.io";
-import Notification, {
+import {
 	INotification,
 	NotificationType,
-} from "../models/notification.model";
+	CreateNotificationData,
+} from "../types/notification";
 import { emitNotificationToUser } from "../socket/socketHandler";
-
-interface CreateNotificationData {
-	recipient: string;
-	type: NotificationType;
-	title: string;
-	message: string;
-	data?: Record<string, any>;
-}
-
+import Notification from "../models/notification.model";
 export class NotificationService {
 	private io: Server;
 

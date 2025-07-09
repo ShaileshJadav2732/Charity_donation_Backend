@@ -3,10 +3,7 @@ import mongoose from "mongoose";
 import Campaign from "../models/campaign.model";
 import { ICampaign } from "../types/campaign";
 import Cause from "../models/cause.model";
-import Donation, {
-	DonationStatus,
-	DonationType,
-} from "../models/donation.model";
+import Donation from "../models/donation.model";
 import Organization, { IOrganization } from "../models/organization.model";
 import { AuthRequest } from "../types";
 import { AppError } from "../utils/appError";
@@ -16,7 +13,7 @@ import {
 	DonorResponse,
 	CampaignResponse,
 } from "../types/organization";
-
+import { DonationStatus, DonationType } from "../types";
 const formatOrganizationResponse = (
 	organization: IOrganization
 ): OrganizationResponse => ({

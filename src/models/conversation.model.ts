@@ -1,19 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
-
-export interface IConversation extends Document {
-	_id: string;
-	participants: {
-		user: mongoose.Types.ObjectId;
-		lastReadAt?: Date;
-		isTyping?: boolean;
-	}[];
-	lastMessage?: mongoose.Types.ObjectId;
-	relatedDonation?: mongoose.Types.ObjectId;
-	relatedCause?: mongoose.Types.ObjectId;
-	isActive: boolean;
-	createdAt: Date;
-	updatedAt: Date;
-}
+import mongoose, { Schema } from "mongoose";
+import { IConversation } from "../types/message";
 
 const ConversationSchema: Schema<IConversation> = new Schema(
 	{

@@ -1,15 +1,12 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 
-import Donation, {
-	DonationStatus,
-	DonationType,
-} from "../models/donation.model";
+import Donation from "../models/donation.model";
 import Organization from "../models/organization.model";
 import { sendEmail } from "../utils/email";
 import { generateDonationReceipt } from "../utils/pdfGenerator";
 import { IUser } from "../types";
-
+import { DonationStatus, DonationType } from "../types";
 export const createDonation = async (req: Request, res: Response) => {
 	try {
 		if (!req.user?._id) {

@@ -1,27 +1,5 @@
-import mongoose, { Schema, Document } from "mongoose";
-
-export enum NotificationType {
-	DONATION_RECEIVED = "DONATION_RECEIVED",
-	DONATION_STATUS_UPDATED = "DONATION_STATUS_UPDATED",
-	CAMPAIGN_CREATED = "CAMPAIGN_CREATED",
-	CAMPAIGN_UPDATED = "CAMPAIGN_UPDATED",
-	FEEDBACK_RECEIVED = "FEEDBACK_RECEIVED",
-	FEEDBACK_RESPONSE = "FEEDBACK_RESPONSE",
-	SYSTEM_NOTIFICATION = "SYSTEM_NOTIFICATION",
-	MESSAGE_RECEIVED = "MESSAGE_RECEIVED",
-	CONVERSATION_STARTED = "CONVERSATION_STARTED",
-}
-
-export interface INotification extends Document {
-	recipient: mongoose.Types.ObjectId;
-	type: NotificationType;
-	title: string;
-	message: string;
-	data?: Record<string, any>;
-	isRead: boolean;
-	createdAt: Date;
-	updatedAt: Date;
-}
+import mongoose, { Schema } from "mongoose";
+import { NotificationType, INotification } from "../types/notification";
 
 const NotificationSchema: Schema<INotification> = new Schema(
 	{
@@ -60,5 +38,8 @@ NotificationSchema.pre("save", function (next) {
 	next();
 });
 
-const Notification = mongoose.model<INotification>("Notification", NotificationSchema);
+const Notification = mongoose.model<INotification>(
+	"Notification",
+	NotificationSchema
+);
 export default Notification;
