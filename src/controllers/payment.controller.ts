@@ -107,15 +107,6 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 				await existingDonation.save();
 				donation = existingDonation;
 			} else {
-				console.log("Creating new donation with data:", {
-					donor: donorId,
-					organization: organizationId,
-					campaign: campaignId || undefined,
-					cause: causeId,
-					amount,
-					paymentIntentId,
-				});
-
 				//  Create new donation
 				donation = await Donation.create({
 					donor: donorId,
@@ -123,7 +114,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 					campaign: campaignId || undefined,
 					cause: causeId,
 					type: DonationType.MONEY,
-					status: DonationStatus.APPROVED,
+					status: DonationStatus.CONFIRMED,
 					amount,
 					description,
 					contactPhone,
@@ -132,7 +123,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 					paymentStatus,
 					isPickup: false,
 				});
-				console.log("_++_+_+_+__+_+_+_+_+_", donation);
+
 				// Update cause raised amount
 				if (causeId && amount) {
 					const cause = await Cause.findById(causeId);

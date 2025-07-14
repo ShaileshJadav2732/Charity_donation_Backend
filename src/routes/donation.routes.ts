@@ -32,7 +32,7 @@ router.get("/:id", getDonationById);
 
 router.get(
 	"/organization/:organizationId",
-	authorize(["organization"]), // Adjust permissions as needed
+	authorize(["organization"]),
 	findOrganizationPendingDonations
 );
 
