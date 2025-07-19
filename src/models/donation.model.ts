@@ -1,24 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-
-export enum DonationType {
-	MONEY = "MONEY",
-	CLOTHES = "CLOTHES",
-	BLOOD = "BLOOD",
-	FOOD = "FOOD",
-	TOYS = "TOYS",
-	BOOKS = "BOOKS",
-	FURNITURE = "FURNITURE",
-	HOUSEHOLD = "HOUSEHOLD",
-	OTHER = "OTHER",
-}
-
-export enum DonationStatus {
-	PENDING = "PENDING",
-	APPROVED = "APPROVED",
-	RECEIVED = "RECEIVED",
-	CONFIRMED = "CONFIRMED",
-	CANCELLED = "CANCELLED",
-}
+import { DonationType, DonationStatus } from "../types";
 
 export interface IDonation extends Document {
 	donor: mongoose.Types.ObjectId;

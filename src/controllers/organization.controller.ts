@@ -1,20 +1,24 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Organization from "../models/organization.model";
+import Campaign from "../models/campaign.model";
+import { ICampaign } from "../types/campaign";
 import Cause from "../models/cause.model";
 import Donation from "../models/donation.model";
-import User from "../models/user.model";
-import DonorProfile from "../models/donor.model";
-import Campaign from "../models/campaign.model";
-import { catchAsync } from "../utils/catchAsync";
-import { AppError } from "../utils/appError";
+import Organization, { IOrganization } from "../models/organization.model";
 import { AuthRequest } from "../types";
-import { DonationStatus, DonationType } from "../models/donation.model";
-
-// Helper function to format organization response
-const formatOrganizationResponse = (organization: any) => ({
+import { AppError } from "../utils/appError";
+import { catchAsync } from "../utils/catchAsync";
+import {
+	OrganizationResponse,
+	DonorResponse,
+	CampaignResponse,
+} from "../types/organization";
+import { DonationStatus, DonationType } from "../types";
+const formatOrganizationResponse = (
+	organization: IOrganization
+): OrganizationResponse => ({
 	id: organization._id.toString(),
-	userId: organization.userId.toString(), // Include User ID for messaging
+	userId: organization.userId.toString(),
 	name: organization.name,
 	description: organization.description,
 	phoneNumber: organization.phoneNumber,
@@ -30,40 +34,46 @@ const formatOrganizationResponse = (organization: any) => ({
 	updatedAt: organization.updatedAt.toISOString(),
 });
 
+/**
+ * Get current organization profile for authenticated user
+ */
 export const getCurrentOrganization = catchAsync(
 	async (req: AuthRequest, res: Response) => {
 		if (!req.user) {
-			return res.status(401).json({ message: "Unauthorized" });
+			throw new AppError("Unauthorized", 401);
 		}
 
-		const userId = req.user.id;
+		const organization = await Organization.findOne({ userId: req.user.id });
+		if (!organization) {
+			throw new AppError("Organization profile not found", 404);
+		}
 
-		const org = await Organization.findOne({ userId });
-
-		return res.status(200).json({
+		res.status(200).json({
 			message: "Organization Profile",
-			organization: org,
+			organization: formatOrganizationResponse(organization),
 		});
 	}
 );
 
-// Get all organizations with pagination and search
+/**
+ * Get all organizations with pagination and search
+ */
 export const getOrganizations = catchAsync(
 	async (req: Request, res: Response) => {
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 10;
 		const search = req.query.search as string;
 
-		const query: any = {};
-
+		const query: mongoose.FilterQuery<IOrganization> = {};
 		if (search) {
 			query.$text = { $search: search };
 		}
 
-		const skip = (page - 1) * limit;
-
 		const [organizations, total] = await Promise.all([
-			Organization.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+			Organization.find(query)
+				.sort({ createdAt: -1 })
+				.skip((page - 1) * limit)
+				.limit(limit),
 			Organization.countDocuments(query),
 		]);
 
@@ -76,18 +86,18 @@ export const getOrganizations = catchAsync(
 	}
 );
 
-// Get a single organization by ID
+/**
+ * Get single organization by ID
+ */
 export const getOrganizationById = catchAsync(
 	async (req: Request, res: Response) => {
 		const { id } = req.params;
 
-		// Validate object ID
 		if (!mongoose.Types.ObjectId.isValid(id)) {
 			throw new AppError("Invalid organization ID format", 400);
 		}
 
 		const organization = await Organization.findById(id);
-
 		if (!organization) {
 			throw new AppError("Organization not found", 404);
 		}
@@ -98,26 +108,23 @@ export const getOrganizationById = catchAsync(
 	}
 );
 
-// Get organization by cause ID
+/**
+ * Get organization by cause ID
+ */
 export const getOrganizationByCauseId = catchAsync(
 	async (req: Request, res: Response) => {
 		const { causeId } = req.params;
 
-		// Validate object ID
 		if (!mongoose.Types.ObjectId.isValid(causeId)) {
 			throw new AppError("Invalid cause ID format", 400);
 		}
 
-		// First find the cause to get the organization ID
 		const cause = await Cause.findById(causeId);
-
 		if (!cause) {
 			throw new AppError("Cause not found", 404);
 		}
 
-		// Now get the organization
 		const organization = await Organization.findById(cause.organizationId);
-
 		if (!organization) {
 			throw new AppError("Organization not found for this cause", 404);
 		}
@@ -128,39 +135,33 @@ export const getOrganizationByCauseId = catchAsync(
 	}
 );
 
-// Get donors for an organization
+/**
+ * Get donors for an organization with detailed analytics
+ */
 export const getOrganizationDonors = catchAsync(
 	async (req: AuthRequest, res: Response) => {
 		if (!req.user) {
-			return res.status(401).json({ message: "Unauthorized" });
+			throw new AppError("Unauthorized", 401);
 		}
 
-		const userId = req.user.id;
-		const page = parseInt(req.query.page as string) || 1;
-		const limit = parseInt(req.query.limit as string) || 10;
-		const search = req.query.search as string;
+		const { page = 1, limit = 10, search } = req.query;
+		const numericPage = parseInt(page as string);
+		const numericLimit = parseInt(limit as string);
 
-		// Find the organization profile for this user
-		const organization = await Organization.findOne({ userId });
-
+		// Find organization
+		const organization = await Organization.findOne({ userId: req.user.id });
 		if (!organization) {
-			return res.status(404).json({
-				success: false,
-				message: "Organization profile not found",
-			});
+			throw new AppError("Organization profile not found", 404);
 		}
 
-		const organizationId = organization._id;
-
-		// Build aggregation pipeline to get donors with their stats
-		const matchStage: any = {
-			organization: new mongoose.Types.ObjectId(organizationId),
-			status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
-		};
-
-		// Get unique donors with their donation stats
-		const donorsAggregation = await Donation.aggregate([
-			{ $match: matchStage },
+		// Build aggregation pipeline
+		const pipeline: mongoose.PipelineStage[] = [
+			{
+				$match: {
+					organization: organization._id,
+					status: { $in: [DonationStatus.CONFIRMED, DonationStatus.RECEIVED] },
+				},
+			},
 			{
 				$group: {
 					_id: "$donor",
@@ -184,6 +185,7 @@ export const getOrganizationDonors = catchAsync(
 					as: "userInfo",
 				},
 			},
+			{ $unwind: { path: "$userInfo", preserveNullAndEmptyArrays: true } },
 			{
 				$lookup: {
 					from: "donorprofiles",
@@ -192,18 +194,7 @@ export const getOrganizationDonors = catchAsync(
 					as: "donorProfile",
 				},
 			},
-			{
-				$unwind: {
-					path: "$userInfo",
-					preserveNullAndEmptyArrays: true,
-				},
-			},
-			{
-				$unwind: {
-					path: "$donorProfile",
-					preserveNullAndEmptyArrays: true,
-				},
-			},
+			{ $unwind: { path: "$donorProfile", preserveNullAndEmptyArrays: true } },
 			{
 				$addFields: {
 					donorName: {
@@ -228,7 +219,6 @@ export const getOrganizationDonors = catchAsync(
 					state: "$donorProfile.state",
 					country: "$donorProfile.country",
 					profileImage: "$donorProfile.profileImage",
-					// Calculate frequency based on donation count and time span
 					frequency: {
 						$cond: {
 							if: { $gte: ["$totalDonations", 12] },
@@ -242,7 +232,6 @@ export const getOrganizationDonors = catchAsync(
 							},
 						},
 					},
-					// Calculate impact score based on total donated and frequency
 					impactScore: {
 						$min: [
 							100,
@@ -256,25 +245,30 @@ export const getOrganizationDonors = catchAsync(
 					},
 				},
 			},
-		]);
+		];
+
+		// Execute aggregation
+		const donorsAggregation = await Donation.aggregate(pipeline);
 
 		// Apply search filter if provided
 		let filteredDonors = donorsAggregation;
 		if (search) {
-			const searchRegex = new RegExp(search, "i");
+			const searchRegex = new RegExp(search as string, "i");
 			filteredDonors = donorsAggregation.filter(
 				(donor) =>
 					searchRegex.test(donor.donorName) || searchRegex.test(donor.email)
 			);
 		}
 
-		// Apply pagination
+		// Paginate results
 		const total = filteredDonors.length;
-		const skip = (page - 1) * limit;
-		const paginatedDonors = filteredDonors.slice(skip, skip + limit);
+		const paginatedDonors = filteredDonors.slice(
+			(numericPage - 1) * numericLimit,
+			numericPage * numericLimit
+		);
 
-		// Format the response
-		const formattedDonors = paginatedDonors.map((donor) => ({
+		// Format response
+		const formattedDonors: DonorResponse[] = paginatedDonors.map((donor) => ({
 			id: donor._id.toString(),
 			name: donor.donorName,
 			email: donor.email,
@@ -302,22 +296,22 @@ export const getOrganizationDonors = catchAsync(
 			(sum, donor) => sum + donor.totalDonated,
 			0
 		);
+		const totalDonations = donorsAggregation.reduce(
+			(sum, donor) => sum + donor.totalDonations,
+			0
+		);
 		const averageDonation =
-			totalFundsRaised /
-				donorsAggregation.reduce(
-					(sum, donor) => sum + donor.totalDonations,
-					0
-				) || 0;
+			totalDonations > 0 ? totalFundsRaised / totalDonations : 0;
 
 		res.status(200).json({
 			success: true,
 			data: {
 				donors: formattedDonors,
 				pagination: {
-					page,
-					limit,
+					page: numericPage,
+					limit: numericLimit,
 					total,
-					totalPages: Math.ceil(total / limit),
+					totalPages: Math.ceil(total / numericLimit),
 				},
 				summary: {
 					totalDonors,
@@ -329,7 +323,9 @@ export const getOrganizationDonors = catchAsync(
 	}
 );
 
-// Helper function to calculate campaign totals from donations
+/**
+ * Helper function to calculate campaign totals from donations
+ */
 const calculateCampaignTotals = async (campaignId: string) => {
 	const result = await Donation.aggregate([
 		{
@@ -353,17 +349,18 @@ const calculateCampaignTotals = async (campaignId: string) => {
 		},
 	]);
 
-	return result.length > 0
-		? {
-				totalRaisedAmount: result[0].totalRaisedAmount || 0,
-				totalSupporters: result[0].totalSupporters || 0,
-			}
-		: { totalRaisedAmount: 0, totalSupporters: 0 };
+	return {
+		totalRaisedAmount: result[0]?.totalRaisedAmount || 0,
+		totalSupporters: result[0]?.totalSupporters || 0,
+	};
 };
 
-// Helper function to format campaign response
-const formatCampaignResponse = async (campaign: any) => {
-	// Calculate real-time totals from donations
+/**
+ * Helper function to format campaign response with calculated totals
+ */
+const formatCampaignResponse = async (
+	campaign: ICampaign
+): Promise<CampaignResponse> => {
 	const { totalRaisedAmount, totalSupporters } = await calculateCampaignTotals(
 		campaign._id.toString()
 	);
@@ -376,54 +373,54 @@ const formatCampaignResponse = async (campaign: any) => {
 		endDate: campaign.endDate.toISOString(),
 		status: campaign.status,
 		totalTargetAmount: campaign.totalTargetAmount,
-		totalRaisedAmount: totalRaisedAmount, // Use calculated value
-		totalSupporters: totalSupporters, // Use calculated value
+		totalRaisedAmount,
+		totalSupporters,
 		imageUrl: campaign.imageUrl,
 		tags: campaign.tags || [],
 		acceptedDonationTypes: campaign.acceptedDonationTypes,
-		organizations: campaign.organizations || [],
-		causes: campaign.causes || [],
+		organizations: campaign.organizations.map((org) => org.toString()),
+		causes: campaign.causes.map((cause) => cause.toString()),
 		createdAt: campaign.createdAt.toISOString(),
 		updatedAt: campaign.updatedAt.toISOString(),
 	};
 };
 
-// Get campaigns for a specific organization
+/**
+ * Get campaigns for an organization
+ */
 export const getOrganizationCampaigns = catchAsync(
 	async (req: Request, res: Response) => {
 		const { organizationId } = req.params;
-		const page = parseInt(req.query.page as string) || 1;
-		const limit = parseInt(req.query.limit as string) || 10;
-		const search = req.query.search as string;
-		const status = req.query.status as string;
+		const { page = 1, limit = 10, search, status } = req.query;
+		const numericPage = parseInt(page as string);
+		const numericLimit = parseInt(limit as string);
 
 		if (!mongoose.Types.ObjectId.isValid(organizationId)) {
 			throw new AppError("Invalid organization ID", 400);
 		}
 
-		const query: any = { organizations: organizationId };
+		const query: mongoose.FilterQuery<ICampaign> = {
+			organizations: new mongoose.Types.ObjectId(organizationId),
+		};
 
 		if (search) {
-			query.$text = { $search: search };
+			query.$text = { $search: search as string };
 		}
 
 		if (status && status !== "all") {
-			query.status = status;
+			query.status = status as string;
 		}
-
-		const skip = (page - 1) * limit;
 
 		const [campaigns, total] = await Promise.all([
 			Campaign.find(query)
 				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(limit)
+				.skip((numericPage - 1) * numericLimit)
+				.limit(numericLimit)
 				.populate("organizations", "name email phone")
-				.populate("causes", "title description targetAmount"), // raisedAmount removed - calculated dynamically
+				.populate("causes", "title description targetAmount"),
 			Campaign.countDocuments(query),
 		]);
 
-		// Format campaigns with calculated totals
 		const formattedCampaigns = await Promise.all(
 			campaigns.map((campaign) => formatCampaignResponse(campaign))
 		);
@@ -433,8 +430,8 @@ export const getOrganizationCampaigns = catchAsync(
 			data: formattedCampaigns,
 			pagination: {
 				total,
-				page,
-				pages: Math.ceil(total / limit),
+				page: numericPage,
+				pages: Math.ceil(total / numericLimit),
 			},
 		});
 	}

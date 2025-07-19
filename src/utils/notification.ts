@@ -1,4 +1,4 @@
-import { DonationStatus } from "../models/donation.model";
+import { DonationStatus } from "../types";
 import { sendEmail } from "./email";
 
 export const sendDonationStatusNotification = async (

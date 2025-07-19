@@ -1,7 +1,7 @@
 import { Response } from "express";
 import User from "../models/user.model";
 import DonorProfile from "../models/donor.model";
-import OrganizationProfile from "../models/organization.model";
+import Organization from "../models/organization.model";
 import { AuthRequest } from "../types";
 
 // Complete donor profile
@@ -131,7 +131,7 @@ export const completeOrganizationProfile = async (
 		}
 
 		// Check if profile already exists
-		let orgProfile = await OrganizationProfile.findOne({ userId: req.user.id });
+		let orgProfile = await Organization.findOne({ userId: req.user.id });
 
 		if (orgProfile) {
 			// Update existing profile
@@ -146,7 +146,7 @@ export const completeOrganizationProfile = async (
 			orgProfile.country = country;
 		} else {
 			// Create new profile
-			orgProfile = new OrganizationProfile({
+			orgProfile = new Organization({
 				userId: req.user.id,
 				name,
 				description,
@@ -182,14 +182,10 @@ export const getDonorProfile = async (req: AuthRequest, res: Response) => {
 		if (!req.user) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
-
 		const donorProfile = await DonorProfile.findOne({ userId: req.user.id });
-
 		if (!donorProfile) {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
-
-		console.log("📋 Fetching donor profile - Cover Image:", donorProfile.coverImage);
 		return res.status(200).json({ profile: donorProfile });
 	} catch (error) {
 		return res.status(500).json({ message: "Server error" });
@@ -205,21 +201,19 @@ export const getOrganizationProfile = async (
 		if (!req.user) {
 			return res.status(401).json({ message: "Unauthorized" });
 		}
-
-		const orgProfile = await OrganizationProfile.findOne({
+		const orgProfile = await Organization.findOne({
 			userId: req.user.id,
 		});
-
 		if (!orgProfile) {
 			return res
 				.status(404)
 				.json({ message: "Organization profile not found" });
 		}
-
-		console.log("📋 Fetching organization profile - Cover Image:", orgProfile.coverImage);
 		return res.status(200).json({ profile: orgProfile });
 	} catch (error) {
-		return res.status(500).json({ message: "Server error" });
+		return res
+			.status(500)
+			.json({ message: "Server error", error: error.message });
 	}
 };
 
@@ -248,7 +242,6 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			return res.status(404).json({ message: "Donor profile not found" });
 		}
 
-		// Update profile fields that are provided (only allowed fields)
 		const {
 			firstName,
 			lastName,
@@ -258,19 +251,26 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			state,
 			country,
 			bio,
-			profileImage
+			profileImage,
 		} = req.body;
 
-		// Update only the fields that are provided and valid
-		if (firstName !== undefined) donorProfile.firstName = firstName;
-		if (lastName !== undefined) donorProfile.lastName = lastName;
-		if (phoneNumber !== undefined) donorProfile.phoneNumber = phoneNumber;
-		if (address !== undefined) donorProfile.address = address;
-		if (city !== undefined) donorProfile.city = city;
-		if (state !== undefined) donorProfile.state = state;
-		if (country !== undefined) donorProfile.country = country;
-		if (bio !== undefined) donorProfile.bio = bio;
-		if (profileImage !== undefined) donorProfile.profileImage = profileImage;
+		const updates = {
+			firstName,
+			lastName,
+			phoneNumber,
+			address,
+			city,
+			state,
+			country,
+			bio,
+			profileImage,
+		};
+
+		for (const [key, value] of Object.entries(updates)) {
+			if (value !== undefined) {
+				(donorProfile as any)[key] = value;
+			}
+		}
 
 		await donorProfile.save();
 
@@ -279,13 +279,15 @@ export const updateDonorProfile = async (req: AuthRequest, res: Response) => {
 			profile: donorProfile,
 		});
 	} catch (error) {
-		console.error("Update donor profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
 
 // Update organization profile
-export const updateOrganizationProfile = async (req: AuthRequest, res: Response) => {
+export const updateOrganizationProfile = async (
+	req: AuthRequest,
+	res: Response
+) => {
 	try {
 		if (!req.user) {
 			return res.status(401).json({ message: "Unauthorized" });
@@ -304,9 +306,13 @@ export const updateOrganizationProfile = async (req: AuthRequest, res: Response)
 		}
 
 		// Find organization profile
-		const orgProfile = await OrganizationProfile.findOne({ userId: req.user.id });
+		const orgProfile = await Organization.findOne({
+			userId: req.user.id,
+		});
 		if (!orgProfile) {
-			return res.status(404).json({ message: "Organization profile not found" });
+			return res
+				.status(404)
+				.json({ message: "Organization profile not found" });
 		}
 
 		// Update profile fields that are provided (only allowed fields)
@@ -320,20 +326,27 @@ export const updateOrganizationProfile = async (req: AuthRequest, res: Response)
 			city,
 			state,
 			country,
-			logo
+			logo,
 		} = req.body;
 
-		// Update only the fields that are provided and valid
-		if (name !== undefined) orgProfile.name = name;
-		if (description !== undefined) orgProfile.description = description;
-		if (phoneNumber !== undefined) orgProfile.phoneNumber = phoneNumber;
-		if (email !== undefined) orgProfile.email = email;
-		if (website !== undefined) orgProfile.website = website;
-		if (address !== undefined) orgProfile.address = address;
-		if (city !== undefined) orgProfile.city = city;
-		if (state !== undefined) orgProfile.state = state;
-		if (country !== undefined) orgProfile.country = country;
-		if (logo !== undefined) orgProfile.logo = logo;
+		const updates = {
+			name,
+			description,
+			phoneNumber,
+			email,
+			website,
+			address,
+			city,
+			state,
+			country,
+			logo,
+		};
+
+		for (const [key, value] of Object.entries(updates)) {
+			if (value !== undefined) {
+				(orgProfile as any)[key] = value;
+			}
+		}
 
 		await orgProfile.save();
 
@@ -342,12 +355,9 @@ export const updateOrganizationProfile = async (req: AuthRequest, res: Response)
 			profile: orgProfile,
 		});
 	} catch (error) {
-		console.error("Update organization profile error:", error);
 		return res.status(500).json({ message: "Server error" });
 	}
 };
-
-
 
 // Upload donor profile image
 export const uploadDonorProfileImage = async (
@@ -360,7 +370,9 @@ export const uploadDonorProfileImage = async (
 		}
 
 		if (!req.cloudinaryUrl) {
-			return res.status(400).json({ message: "No image uploaded to cloud storage" });
+			return res
+				.status(400)
+				.json({ message: "No image uploaded to cloud storage" });
 		}
 
 		// Check if user exists and has donor role
@@ -383,7 +395,7 @@ export const uploadDonorProfileImage = async (
 
 		// Update profile with Cloudinary URL
 		donorProfile.profileImage = req.cloudinaryUrl;
-		donorProfile.cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
+		(donorProfile as any).cloudinaryPublicId = req.cloudinaryPublicId; // Store for future deletion if needed
 		await donorProfile.save();
 
 		return res.status(200).json({

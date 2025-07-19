@@ -1,22 +1,11 @@
 import { Server } from "socket.io";
-import Notification, {
-	NotificationType,
-	INotification,
-} from "../models/notification.model";
 import {
-	emitNotificationToUser,
-	emitNotificationToRole,
-} from "../socket/socketHandler";
-import mongoose from "mongoose";
-
-interface CreateNotificationData {
-	recipient: string;
-	type: NotificationType;
-	title: string;
-	message: string;
-	data?: Record<string, any>;
-}
-
+	INotification,
+	NotificationType,
+	CreateNotificationData,
+} from "../types/notification";
+import { emitNotificationToUser } from "../socket/socketHandler";
+import Notification from "../models/notification.model";
 export class NotificationService {
 	private io: Server;
 
@@ -59,25 +48,48 @@ export class NotificationService {
 		organizationId: string,
 		donationData: {
 			donorName: string;
-			amount: number;
+			amount?: number;
+			quantity?: number;
+			unit?: string;
+			donationType: string;
 			cause: string;
 			donationId: string;
 		}
 	): Promise<INotification> {
+		let message: string;
+		let title: string;
+
+		if (donationData.donationType === "MONEY") {
+			title = "New Monetary Donation Received!";
+			message = `${donationData.donorName} donated $${donationData.amount} to ${donationData.cause}`;
+		} else {
+			title = "New Item Donation Received!";
+			const itemDetails =
+				donationData.quantity && donationData.unit
+					? `${donationData.quantity} ${donationData.unit} of ${donationData.donationType.toLowerCase()}`
+					: donationData.donationType.toLowerCase();
+			message = `${donationData.donorName} donated ${itemDetails} to ${donationData.cause}`;
+		}
+
 		return this.createAndEmitNotification({
 			recipient: organizationId,
 			type: NotificationType.DONATION_RECEIVED,
-			title: "New Donation Received!",
-			message: `${donationData.donorName} donated $${donationData.amount} to ${donationData.cause}`,
+			title,
+			message,
 			data: {
 				donationId: donationData.donationId,
 				donorName: donationData.donorName,
-				amount: donationData.amount,
+				donationType: donationData.donationType,
+				...(donationData.donationType === "MONEY"
+					? { amount: donationData.amount }
+					: {
+							quantity: donationData.quantity,
+							unit: donationData.unit,
+						}),
 				cause: donationData.cause,
 			},
 		});
 	}
-
 	// Create donation status update notification
 	async createDonationStatusNotification(
 		donorId: string,
@@ -149,42 +161,6 @@ export class NotificationService {
 	}
 
 	// Create feedback notification
-	async createFeedbackNotification(
-		recipientId: string,
-		feedbackData: {
-			feedbackId: string;
-			senderName: string;
-			type: "received" | "response";
-			subject?: string;
-		}
-	): Promise<INotification> {
-		const type =
-			feedbackData.type === "received"
-				? NotificationType.FEEDBACK_RECEIVED
-				: NotificationType.FEEDBACK_RESPONSE;
-
-		const title =
-			feedbackData.type === "received"
-				? "New Feedback Received"
-				: "Feedback Response";
-
-		const message =
-			feedbackData.type === "received"
-				? `You received new feedback from ${feedbackData.senderName}`
-				: `${feedbackData.senderName} responded to your feedback`;
-
-		return this.createAndEmitNotification({
-			recipient: recipientId,
-			type,
-			title,
-			message,
-			data: {
-				feedbackId: feedbackData.feedbackId,
-				senderName: feedbackData.senderName,
-				subject: feedbackData.subject,
-			},
-		});
-	}
 
 	// Create system notification
 	async createSystemNotification(

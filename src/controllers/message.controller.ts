@@ -1,15 +1,12 @@
 import { Request, Response } from "express";
-import Message, { IMessage } from "../models/message.model";
-import Conversation, { IConversation } from "../models/conversation.model";
+import Message from "../models/message.model";
+import Conversation from "../models/conversation.model";
 import User from "../models/user.model";
 import DonorProfile from "../models/donor.model";
 import Organization from "../models/organization.model";
-import Cause from "../models/cause.model";
-import Donation from "../models/donation.model";
 import { AuthRequest } from "../types";
-// File upload functionality removed
 import { NotificationService } from "../services/notificationService";
-import { NotificationType } from "../models/notification.model";
+import { NotificationType } from "../types/notification";
 
 // Get all conversations for the current user
 export const getConversations = async (req: AuthRequest, res: Response) => {
@@ -23,22 +20,16 @@ export const getConversations = async (req: AuthRequest, res: Response) => {
 
 		const page = parseInt(req.query.page as string) || 1;
 		const limit = parseInt(req.query.limit as string) || 20;
-		const search = req.query.search as string;
+
 		const unreadOnly = req.query.unreadOnly === "true";
 
 		const skip = (page - 1) * limit;
 
 		// Build query
-		let query: any = {
+		let query = {
 			"participants.user": userId,
 			isActive: true,
 		};
-
-		// Add search functionality
-		if (search) {
-			// We'll search in participant names and last message content
-			// This requires a more complex aggregation pipeline
-		}
 
 		// Get conversations
 		let conversationsQuery = Conversation.find(query)
@@ -488,7 +479,7 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 		await message.save();
 
 		// Update conversation with last message
-		conversation.lastMessage = message._id;
+		conversation.lastMessage = message._id as any;
 		await conversation.save();
 
 		// Populate conversation data
@@ -580,12 +571,7 @@ export const createConversation = async (req: AuthRequest, res: Response) => {
 						senderName: senderName,
 					},
 				});
-			} catch (notificationError) {
-				console.error(
-					"Failed to send conversation notification:",
-					notificationError
-				);
-			}
+			} catch (notificationError) {}
 		}
 
 		res.status(201).json({
@@ -676,7 +662,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
 		await message.save();
 
 		// Update conversation
-		conversation.lastMessage = message._id;
+		conversation.lastMessage = message._id as any;
 		conversation.updatedAt = new Date();
 		await conversation.save();
 
@@ -1120,178 +1106,6 @@ export const markConversationAsRead = async (
 	}
 };
 
-// Universal participant ID resolver - resolves ANY ID to User ID for messaging
-export const resolveParticipantId = async (req: Request, res: Response) => {
-	try {
-		const { id } = req.params;
-
-		if (!id) {
-			return res.status(400).json({
-				success: false,
-				message: "ID parameter is required",
-			});
-		}
-
-		let participantUserId: string | null = null;
-		let participantInfo: any = null;
-		let resolvedFrom: string = "";
-
-		// Strategy 1: Try as direct User ID
-		try {
-			const user = await User.findById(id);
-			if (user) {
-				participantUserId = user._id.toString();
-				participantInfo = {
-					id: user._id.toString(),
-					email: user.email,
-					role: user.role,
-					type: "user",
-				};
-				resolvedFrom = "direct_user";
-			}
-		} catch (error) {
-			// Not a valid User ID
-		}
-
-		// Strategy 2: Try as Organization ID
-		if (!participantUserId) {
-			try {
-				const organization = await Organization.findById(id);
-				if (organization && organization.userId) {
-					const user = await User.findById(organization.userId);
-					if (user) {
-						participantUserId = user._id.toString();
-						participantInfo = {
-							id: user._id.toString(),
-							email: user.email,
-							role: user.role,
-							type: "organization",
-							organizationId: organization._id.toString(),
-							organizationName: organization.name,
-						};
-						resolvedFrom = "organization";
-					}
-				}
-			} catch (error) {
-				// Not a valid Organization ID
-			}
-		}
-
-		// Strategy 3: Try as Cause ID
-		if (!participantUserId) {
-			try {
-				const cause = await Cause.findById(id).populate("organizationId");
-				if (cause && cause.organizationId) {
-					const organization = cause.organizationId as any;
-					if (organization.userId) {
-						const user = await User.findById(organization.userId);
-						if (user) {
-							participantUserId = user._id.toString();
-							participantInfo = {
-								id: user._id.toString(),
-								email: user.email,
-								role: user.role,
-								type: "organization",
-								organizationId: organization._id.toString(),
-								organizationName: organization.name,
-								causeId: cause._id.toString(),
-								causeTitle: cause.title,
-							};
-							resolvedFrom = "cause";
-						}
-					}
-				}
-			} catch (error) {
-				// Not a valid Cause ID
-			}
-		}
-
-		// Strategy 4: Try as DonorProfile ID
-		if (!participantUserId) {
-			try {
-				const donorProfile = await DonorProfile.findById(id);
-				if (donorProfile && donorProfile.userId) {
-					const user = await User.findById(donorProfile.userId);
-					if (user) {
-						participantUserId = user._id.toString();
-						participantInfo = {
-							id: user._id.toString(),
-							email: user.email,
-							role: user.role,
-							type: "donor",
-							donorProfileId: donorProfile._id.toString(),
-							donorName: `${donorProfile.firstName} ${donorProfile.lastName}`,
-						};
-						resolvedFrom = "donor_profile";
-					}
-				}
-			} catch (error) {
-				// Not a valid DonorProfile ID
-			}
-		}
-
-		// Strategy 5: Try as Donation ID (get donor or organization)
-		if (!participantUserId) {
-			try {
-				const donation =
-					await Donation.findById(id).populate("donor organization");
-				if (donation) {
-					// For donations, we could resolve to either donor or organization
-					// Let's default to the organization (recipient of donation)
-					const organization = donation.organization as any;
-					if (organization && organization.userId) {
-						const user = await User.findById(organization.userId);
-						if (user) {
-							participantUserId = user._id.toString();
-							participantInfo = {
-								id: user._id.toString(),
-								email: user.email,
-								role: user.role,
-								type: "organization",
-								organizationId: organization._id.toString(),
-								organizationName: organization.name,
-								donationId: donation._id.toString(),
-								donationAmount: donation.amount,
-								donationType: donation.type,
-							};
-							resolvedFrom = "donation_organization";
-						}
-					}
-				}
-			} catch (error) {
-				// Not a valid Donation ID
-			}
-		}
-
-		if (!participantUserId || !participantInfo) {
-			return res.status(404).json({
-				success: false,
-				message:
-					"Could not resolve ID to a valid participant. Tried: User, Organization, Cause, DonorProfile, Donation",
-				inputId: id,
-			});
-		}
-
-		res.status(200).json({
-			success: true,
-			data: {
-				participantId: participantUserId,
-				participantInfo,
-				resolvedFrom,
-				inputId: id,
-			},
-		});
-	} catch (error: any) {
-		console.error("Error resolving participant ID:", error);
-		res.status(500).json({
-			success: false,
-			message: "Failed to resolve participant ID",
-			error: error.message,
-		});
-	}
-};
-
-// Get User IDs by role for testing messaging system
 export const getUserIdsByRole = async (req: Request, res: Response) => {
 	try {
 		const { role } = req.params; // 'donor' or 'organization'

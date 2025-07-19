@@ -50,10 +50,10 @@ export const register = async (req: Request, res: Response) => {
 		await newUser.save();
 
 		// Generate JWT token
-		const token = jwt.sign(
+		const token = (jwt as any).sign(
 			{ id: newUser._id, email: newUser.email, role: newUser.role },
-			JWT_SECRET as string,
-			{ expiresIn: JWT_EXPIRATION as string }
+			JWT_SECRET,
+			{ expiresIn: JWT_EXPIRATION }
 		);
 
 		return res.status(201).json({
@@ -90,10 +90,10 @@ export const login = async (req: Request, res: Response) => {
 		}
 
 		// Generate JWT token
-		const token = jwt.sign(
+		const token = (jwt as any).sign(
 			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET as string,
-			{ expiresIn: JWT_EXPIRATION as string }
+			JWT_SECRET,
+			{ expiresIn: JWT_EXPIRATION }
 		);
 
 		return res.status(200).json({
@@ -131,10 +131,10 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 		}
 
 		// Generate JWT token
-		const token = jwt.sign(
+		const token = (jwt as any).sign(
 			{ id: user._id, email: user.email, role: user.role },
-			JWT_SECRET as string,
-			{ expiresIn: JWT_EXPIRATION as string }
+			JWT_SECRET,
+			{ expiresIn: JWT_EXPIRATION }
 		);
 
 		return res.status(200).json({

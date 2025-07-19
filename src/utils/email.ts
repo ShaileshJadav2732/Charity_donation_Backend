@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { DonationStatus } from "../models/donation.model";
+import { DonationStatus } from "../types";
 
 // Initialize Resend with your API key
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -29,8 +29,9 @@ export const sendEmail = async (
 		if (status === DonationStatus.RECEIVED) {
 			statusSpecificContent = `
 				<p>Your donation has been <strong>received</strong> by the organization.</p>
-				${photoUrl
-					? `
+				${
+					photoUrl
+						? `
 				<p>The organization has uploaded a photo of your donation:</p>
 				<div style="margin: 20px 0;">
 					<img src="${process.env.BACKEND_URL || "http://localhost:5000"}${photoUrl}"
@@ -38,7 +39,7 @@ export const sendEmail = async (
 				</div>
 				<p>Please confirm that you recognize this donation by clicking the "Confirm" button in your dashboard.</p>
 				`
-					: ""
+						: ""
 				}
 			`;
 		} else if (status === DonationStatus.CONFIRMED) {
@@ -48,8 +49,9 @@ export const sendEmail = async (
 					<p style="margin: 0; color: #0369a1;">Your donation has been <strong>confirmed</strong> and the donation process is now complete!</p>
 				</div>
 				<p>Thank you for making a difference in the community. Your generous contribution has been successfully processed and confirmed.</p>
-				${pdfReceiptUrl
-					? `
+				${
+					pdfReceiptUrl
+						? `
 				<div style="background-color: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 16px; margin: 16px 0;">
 					<h4 style="color: #15803d; margin: 0 0 8px 0;">📄 Your Receipt is Ready!</h4>
 					<p style="margin: 0; color: #15803d;">Your donation receipt has been generated and is available for download.</p>
@@ -61,7 +63,7 @@ export const sendEmail = async (
 					</p>
 				</div>
 				`
-					: ""
+						: ""
 				}
 				<p><strong>What happens next?</strong></p>
 				<ul>
@@ -124,12 +126,13 @@ export const sendEmail = async (
         <h2>${title}</h2>
         <p>${greeting}</p>
         ${statusSpecificContent}
-        ${amount
-				? `<p>Amount: <strong>₹${amount.toFixed(2)}</strong></p>`
-				: quantity
-					? `<p>Quantity: <strong>${quantity} ${unit || ""}</strong></p>`
-					: ""
-			}
+        ${
+					amount
+						? `<p>Amount: <strong>₹${amount.toFixed(2)}</strong></p>`
+						: quantity
+							? `<p>Quantity: <strong>${quantity} ${unit || ""}</strong></p>`
+							: ""
+				}
         <p>Thank you for your generous support!</p>
         <p>Best regards,<br>Your Organization</p>
       </div>

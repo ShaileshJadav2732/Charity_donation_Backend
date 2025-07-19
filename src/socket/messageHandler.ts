@@ -1,25 +1,9 @@
-import { Server, Socket } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import User from '../models/user.model';
-import Conversation from '../models/conversation.model';
-import Message from '../models/message.model';
-
-interface AuthenticatedSocket extends Socket {
-	userId?: string;
-	userRole?: string;
-}
-
-interface TypingData {
-	conversationId: string;
-	userId: string;
-	userName: string;
-	isTyping: boolean;
-}
-
-interface JoinConversationData {
-	conversationId: string;
-}
-
+import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+import User from "../models/user.model";
+import Conversation from "../models/conversation.model";
+import Message from "../models/message.model";
+import { AuthenticatedSocket, TypingData } from "../types/message";
 // Store online users
 const onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
 
@@ -27,15 +11,17 @@ const onlineUsers = new Map<string, { socketId: string; lastSeen: Date }>();
 const typingUsers = new Map<string, Set<string>>(); // conversationId -> Set of userIds
 
 export const setupMessageHandlers = (io: Server) => {
-	io.on('connection', async (socket: AuthenticatedSocket) => {
-		console.log('User connected to messaging:', socket.id);
+	io.on("connection", async (socket: AuthenticatedSocket) => {
+		console.log("User connected to messaging:", socket.id);
 
 		// Authenticate user
 		try {
-			const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1];
-			
+			const token =
+				socket.handshake.auth.token ||
+				socket.handshake.headers.authorization?.split(" ")[1];
+
 			if (!token) {
-				socket.emit('error', { message: 'Authentication required' });
+				socket.emit("error", { message: "Authentication required" });
 				socket.disconnect();
 				return;
 			}
@@ -44,7 +30,7 @@ export const setupMessageHandlers = (io: Server) => {
 			const user = await User.findById(decoded.id);
 
 			if (!user) {
-				socket.emit('error', { message: 'User not found' });
+				socket.emit("error", { message: "User not found" });
 				socket.disconnect();
 				return;
 			}
@@ -59,67 +45,69 @@ export const setupMessageHandlers = (io: Server) => {
 			});
 
 			// Broadcast user online status
-			socket.broadcast.emit('user:online', {
+			socket.broadcast.emit("user:online", {
 				userId: socket.userId,
 				isOnline: true,
 				lastSeen: new Date(),
 			});
 
 			console.log(`User ${socket.userId} connected to messaging`);
-
 		} catch (error) {
-			console.error('Socket authentication error:', error);
-			socket.emit('error', { message: 'Authentication failed' });
+			console.error("Socket authentication error:", error);
+			socket.emit("error", { message: "Authentication failed" });
 			socket.disconnect();
 			return;
 		}
 
 		// Join conversation room
-		socket.on('conversation:join', async (conversationId: string) => {
+		socket.on("conversation:join", async (conversationId: string) => {
 			try {
 				if (!socket.userId) return;
 
 				// Verify user is participant in conversation
 				const conversation = await Conversation.findOne({
 					_id: conversationId,
-					'participants.user': socket.userId,
+					"participants.user": socket.userId,
 					isActive: true,
 				});
 
 				if (!conversation) {
-					socket.emit('error', { message: 'Conversation not found or access denied' });
+					socket.emit("error", {
+						message: "Conversation not found or access denied",
+					});
 					return;
 				}
 
 				// Join the conversation room
 				socket.join(`conversation_${conversationId}`);
-				
-				console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+
+				console.log(
+					`User ${socket.userId} joined conversation ${conversationId}`
+				);
 
 				// Emit confirmation
-				socket.emit('conversation:joined', { conversationId });
-
+				socket.emit("conversation:joined", { conversationId });
 			} catch (error) {
-				console.error('Error joining conversation:', error);
-				socket.emit('error', { message: 'Failed to join conversation' });
+				console.error("Error joining conversation:", error);
+				socket.emit("error", { message: "Failed to join conversation" });
 			}
 		});
 
 		// Leave conversation room
-		socket.on('conversation:leave', (conversationId: string) => {
+		socket.on("conversation:leave", (conversationId: string) => {
 			socket.leave(`conversation_${conversationId}`);
 			console.log(`User ${socket.userId} left conversation ${conversationId}`);
 		});
 
 		// Handle typing indicators
-		socket.on('typing:start', async (data: TypingData) => {
+		socket.on("typing:start", async (data: TypingData) => {
 			try {
 				if (!socket.userId || socket.userId !== data.userId) return;
 
 				// Verify user is participant in conversation
 				const conversation = await Conversation.findOne({
 					_id: data.conversationId,
-					'participants.user': socket.userId,
+					"participants.user": socket.userId,
 					isActive: true,
 				});
 
@@ -132,31 +120,32 @@ export const setupMessageHandlers = (io: Server) => {
 				typingUsers.get(data.conversationId)!.add(socket.userId);
 
 				// Update conversation typing status
-				await conversation.setTypingStatus(socket.userId, true);
+				// await conversation.setTypingStatus(socket.userId, true);
 
 				// Broadcast typing indicator to other participants
-				socket.to(`conversation_${data.conversationId}`).emit('typing:start', {
+				socket.to(`conversation_${data.conversationId}`).emit("typing:start", {
 					conversationId: data.conversationId,
 					userId: socket.userId,
 					userName: data.userName,
 					isTyping: true,
 				});
 
-				console.log(`User ${socket.userId} started typing in conversation ${data.conversationId}`);
-
+				console.log(
+					`User ${socket.userId} started typing in conversation ${data.conversationId}`
+				);
 			} catch (error) {
-				console.error('Error handling typing start:', error);
+				console.error("Error handling typing start:", error);
 			}
 		});
 
-		socket.on('typing:stop', async (data: TypingData) => {
+		socket.on("typing:stop", async (data: TypingData) => {
 			try {
 				if (!socket.userId || socket.userId !== data.userId) return;
 
 				// Verify user is participant in conversation
 				const conversation = await Conversation.findOne({
 					_id: data.conversationId,
-					'participants.user': socket.userId,
+					"participants.user": socket.userId,
 					isActive: true,
 				});
 
@@ -170,58 +159,60 @@ export const setupMessageHandlers = (io: Server) => {
 					}
 				}
 
-				// Update conversation typing status
-				await conversation.setTypingStatus(socket.userId, false);
-
 				// Broadcast typing stop to other participants
-				socket.to(`conversation_${data.conversationId}`).emit('typing:stop', {
+				socket.to(`conversation_${data.conversationId}`).emit("typing:stop", {
 					conversationId: data.conversationId,
 					userId: socket.userId,
 					userName: data.userName,
 					isTyping: false,
 				});
 
-				console.log(`User ${socket.userId} stopped typing in conversation ${data.conversationId}`);
-
+				console.log(
+					`User ${socket.userId} stopped typing in conversation ${data.conversationId}`
+				);
 			} catch (error) {
-				console.error('Error handling typing stop:', error);
+				console.error("Error handling typing stop:", error);
 			}
 		});
 
 		// Handle message read receipts
-		socket.on('message:read', async (data: { messageId: string; conversationId: string }) => {
-			try {
-				if (!socket.userId) return;
+		socket.on(
+			"message:read",
+			async (data: { messageId: string; conversationId: string }) => {
+				try {
+					if (!socket.userId) return;
 
-				const message = await Message.findOne({
-					_id: data.messageId,
-					recipient: socket.userId,
-				});
+					const message = await Message.findOne({
+						_id: data.messageId,
+						recipient: socket.userId,
+					});
 
-				if (!message || message.isRead) return;
+					if (!message || message.isRead) return;
 
-				// Mark message as read
-				message.isRead = true;
-				message.readAt = new Date();
-				await message.save();
+					// Mark message as read
+					message.isRead = true;
+					message.readAt = new Date();
+					await message.save();
 
-				// Broadcast read receipt to conversation
-				io.to(`conversation_${data.conversationId}`).emit('message:read', {
-					messageId: data.messageId,
-					conversationId: data.conversationId,
-					userId: socket.userId,
-					readAt: message.readAt,
-				});
+					// Broadcast read receipt to conversation
+					io.to(`conversation_${data.conversationId}`).emit("message:read", {
+						messageId: data.messageId,
+						conversationId: data.conversationId,
+						userId: socket.userId,
+						readAt: message.readAt,
+					});
 
-				console.log(`Message ${data.messageId} marked as read by user ${socket.userId}`);
-
-			} catch (error) {
-				console.error('Error handling message read:', error);
+					console.log(
+						`Message ${data.messageId} marked as read by user ${socket.userId}`
+					);
+				} catch (error) {
+					console.error("Error handling message read:", error);
+				}
 			}
-		});
+		);
 
 		// Handle user status updates
-		socket.on('user:status', (data: { status: 'online' | 'away' | 'busy' }) => {
+		socket.on("user:status", (data: { status: "online" | "away" | "busy" }) => {
 			if (!socket.userId) return;
 
 			// Update user status
@@ -232,7 +223,7 @@ export const setupMessageHandlers = (io: Server) => {
 			}
 
 			// Broadcast status update
-			socket.broadcast.emit('user:status', {
+			socket.broadcast.emit("user:status", {
 				userId: socket.userId,
 				status: data.status,
 				lastSeen: new Date(),
@@ -240,7 +231,7 @@ export const setupMessageHandlers = (io: Server) => {
 		});
 
 		// Handle disconnect
-		socket.on('disconnect', async () => {
+		socket.on("disconnect", async () => {
 			if (!socket.userId) return;
 
 			console.log(`User ${socket.userId} disconnected from messaging`);
@@ -252,19 +243,19 @@ export const setupMessageHandlers = (io: Server) => {
 			for (const [conversationId, typingSet] of typingUsers.entries()) {
 				if (typingSet.has(socket.userId)) {
 					typingSet.delete(socket.userId);
-					
+
 					// Update conversation typing status
 					try {
 						const conversation = await Conversation.findById(conversationId);
 						if (conversation) {
-							await conversation.setTypingStatus(socket.userId, false);
+							// await conversation.setTypingStatus(socket.userId, false);
 						}
 					} catch (error) {
-						console.error('Error updating typing status on disconnect:', error);
+						console.error("Error updating typing status on disconnect:", error);
 					}
 
 					// Broadcast typing stop
-					socket.to(`conversation_${conversationId}`).emit('typing:stop', {
+					socket.to(`conversation_${conversationId}`).emit("typing:stop", {
 						conversationId,
 						userId: socket.userId,
 						isTyping: false,
@@ -277,7 +268,7 @@ export const setupMessageHandlers = (io: Server) => {
 			}
 
 			// Broadcast user offline status
-			socket.broadcast.emit('user:offline', {
+			socket.broadcast.emit("user:offline", {
 				userId: socket.userId,
 				isOnline: false,
 				lastSeen: new Date(),
@@ -285,8 +276,8 @@ export const setupMessageHandlers = (io: Server) => {
 		});
 
 		// Handle errors
-		socket.on('error', (error) => {
-			console.error('Socket error:', error);
+		socket.on("error", (error) => {
+			console.error("Socket error:", error);
 		});
 	});
 };

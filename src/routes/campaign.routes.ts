@@ -1,11 +1,12 @@
 import express from "express";
 import {
 	createCampaign,
-	getCampaigns,
+	deleteCampaign,
 	getCampaignById,
 	getCampaignDetails,
+	getCampaignDetailsWithDonations,
+	getCampaigns,
 	updateCampaign,
-	deleteCampaign,
 	addCauseToCampaign,
 	removeCauseFromCampaign,
 } from "../controllers/campaign.controller";
@@ -18,6 +19,10 @@ const router = express.Router();
 router.get("/", getCampaigns);
 router.get("/:campaignId", getCampaignById);
 router.get("/:campaignId/details", getCampaignDetails);
+router.get(
+	"/:campaignId/details-with-donations",
+	getCampaignDetailsWithDonations
+);
 
 // Protected routes (require authentication)
 router.use(authenticate);
@@ -26,5 +31,17 @@ router.use(authenticate);
 router.post("/", authorize(["organization"]), createCampaign);
 router.patch("/:campaignId", authorize(["organization"]), updateCampaign);
 router.delete("/:campaignId", authorize(["organization"]), deleteCampaign);
+
+// Cause management routes
+router.post(
+	"/:campaignId/causes",
+	authorize(["organization"]),
+	addCauseToCampaign
+);
+router.delete(
+	"/:campaignId/causes/:causeId",
+	authorize(["organization"]),
+	removeCauseFromCampaign
+);
 
 export default router;

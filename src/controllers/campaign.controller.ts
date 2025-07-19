@@ -1,13 +1,13 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Campaign, { ICampaign } from "../models/campaign.model";
+import Campaign from "../models/campaign.model";
 import Cause from "../models/cause.model";
-import OrganizationProfile from "../models/organization.model";
-import Donation, { DonationType } from "../models/donation.model";
+import Donation from "../models/donation.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
-
+import { ICampaign } from "types/campaign";
+import { DonationType } from "../types";
 interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
 }
@@ -75,7 +75,6 @@ const calculateCampaignTotals = async (campaignId: string) => {
 			totalSupporters: uniqueDonors.length,
 		};
 	} catch (error) {
-		console.error("Error calculating campaign totals:", error);
 		return { totalRaisedAmount: 0, totalItemDonations: 0, totalSupporters: 0 };
 	}
 };
@@ -139,8 +138,6 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 
 	const query: any = {};
 
-	// Log query parameters for debugging
-
 	// Handle text search
 	if (search) {
 		query.$text = { $search: search as string };
@@ -182,7 +179,10 @@ export const getCampaigns = catchAsync(async (req: Request, res: Response) => {
 	const [campaigns, total] = await Promise.all([
 		Campaign.find(query)
 			.populate("organizations", "name email phone")
-			.populate("causes", "title description targetAmount") // raisedAmount removed - calculated dynamically
+			.populate(
+				"causes",
+				"title description targetAmount donationItems acceptanceType"
+			) // Added donationItems and acceptanceType
 			.sort(sort)
 			.skip(skip)
 			.limit(Number(limit)),
@@ -212,7 +212,10 @@ export const getCampaignById = catchAsync(
 
 		const campaign = await Campaign.findById(campaignId)
 			.populate("organizations", "name email phone address")
-			.populate("causes", "title description targetAmount"); // raisedAmount removed - calculated dynamically
+			.populate(
+				"causes",
+				"title description targetAmount donationItems acceptanceType"
+			); // Added donationItems and acceptanceType
 
 		if (!campaign) {
 			throw new AppError("Campaign not found", 404);
@@ -235,7 +238,10 @@ export const getCampaignDetails = catchAsync(
 
 			const campaign = await Campaign.findById(campaignId)
 				.populate("organizations", "name email phone address")
-				.populate("causes", "title description targetAmount"); // raisedAmount removed - calculated dynamically
+				.populate(
+					"causes",
+					"title description targetAmount donationItems acceptanceType"
+				); // Added donationItems and acceptanceType
 
 			if (!campaign) {
 				throw new AppError("Campaign not found", 404);
@@ -307,8 +313,21 @@ export const createCampaign = catchAsync(
 			throw new AppError("Missing required fields", 400);
 		}
 
-		if (totalTargetAmount <= 0) {
-			throw new AppError("Target amount must be greater than 0", 400);
+		// Check if campaign accepts money donations
+		const acceptsMoney = acceptedDonationTypes.includes(DonationType.MONEY);
+
+		// For campaigns that accept money, totalTargetAmount must be > 0
+		// For items-only campaigns, totalTargetAmount can be 0
+		if (acceptsMoney && totalTargetAmount <= 0) {
+			throw new AppError(
+				"Target amount must be greater than 0 for campaigns accepting money donations",
+				400
+			);
+		}
+
+		// For any campaign, totalTargetAmount cannot be negative
+		if (totalTargetAmount < 0) {
+			throw new AppError("Target amount cannot be negative", 400);
 		}
 
 		const start = new Date(startDate);
@@ -354,7 +373,7 @@ export const createCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
+			select: "title description targetAmount donationItems acceptanceType", // Added donationItems and acceptanceType
 		});
 		await campaign.populate({
 			path: "organizations",
@@ -404,8 +423,25 @@ export const updateCampaign = catchAsync(
 			throw new AppError("End date must be after start date", 400);
 		}
 
-		if (totalTargetAmount !== undefined && totalTargetAmount <= 0) {
-			throw new AppError("Target amount must be greater than 0", 400);
+		if (totalTargetAmount !== undefined) {
+			// Check if campaign accepts money donations
+			const campaignAcceptedTypes =
+				acceptedDonationTypes || campaign.acceptedDonationTypes;
+			const acceptsMoney = campaignAcceptedTypes.includes(DonationType.MONEY);
+
+			// For campaigns that accept money, totalTargetAmount must be > 0
+			// For items-only campaigns, totalTargetAmount can be 0
+			if (acceptsMoney && totalTargetAmount <= 0) {
+				throw new AppError(
+					"Target amount must be greater than 0 for campaigns accepting money donations",
+					400
+				);
+			}
+
+			// For any campaign, totalTargetAmount cannot be negative
+			if (totalTargetAmount < 0) {
+				throw new AppError("Target amount cannot be negative", 400);
+			}
 		}
 
 		if (acceptedDonationTypes) {
@@ -461,7 +497,7 @@ export const updateCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
+			select: "title description targetAmount donationItems acceptanceType", // Added donationItems and acceptanceType
 		});
 		await campaign.populate({
 			path: "organizations",
@@ -589,7 +625,7 @@ export const addCauseToCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
+			select: "title description targetAmount donationItems acceptanceType", // Added donationItems and acceptanceType
 		});
 		await campaign.populate({
 			path: "organizations",
@@ -644,7 +680,7 @@ export const removeCauseFromCampaign = catchAsync(
 
 		await campaign.populate({
 			path: "causes",
-			select: "title description targetAmount", // raisedAmount removed - calculated dynamically
+			select: "title description targetAmount donationItems acceptanceType", // Added donationItems and acceptanceType
 		});
 		await campaign.populate({
 			path: "organizations",
@@ -656,6 +692,185 @@ export const removeCauseFromCampaign = catchAsync(
 		res.status(200).json({
 			success: true,
 			data: formattedCampaign,
+		});
+	}
+);
+
+// Get campaign details with comprehensive donation data
+export const getCampaignDetailsWithDonations = catchAsync(
+	async (req: Request, res: Response) => {
+		const { campaignId } = req.params;
+
+		if (!mongoose.Types.ObjectId.isValid(campaignId)) {
+			throw new AppError("Invalid campaign ID", 400);
+		}
+
+		// Get campaign with populated causes and organizations
+		const campaign = await Campaign.findById(campaignId)
+			.populate("organizations", "name email phone address")
+			.populate(
+				"causes",
+				"title description targetAmount donationItems acceptanceType"
+			);
+
+		if (!campaign) {
+			throw new AppError("Campaign not found", 404);
+		}
+
+		// Get all donations for this campaign
+		const campaignDonations = await Donation.find({
+			campaign: campaignId,
+			status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] }, // Only count confirmed donations
+		}).populate("donor", "name email");
+
+		// Calculate campaign-level statistics
+		const totalRaisedAmount = campaignDonations
+			.filter((donation) => donation.type === DonationType.MONEY)
+			.reduce((sum, donation) => sum + (donation.amount || 0), 0);
+
+		const uniqueDonors = new Set(
+			campaignDonations.map((d) => d.donor.toString())
+		);
+		const donorCount = uniqueDonors.size;
+
+		// Calculate cause-level statistics
+		const causesWithStats = await Promise.all(
+			campaign.causes.map(async (cause: any) => {
+				// Get donations for this specific cause
+				const causeDonations = await Donation.find({
+					cause: cause._id,
+					status: { $in: ["APPROVED", "RECEIVED", "CONFIRMED"] },
+				}).populate("donor", "name email");
+
+				// Calculate raised amount for this cause
+				const causeRaisedAmount = causeDonations
+					.filter((donation) => donation.type === DonationType.MONEY)
+					.reduce((sum, donation) => sum + (donation.amount || 0), 0);
+
+				// Calculate progress percentage
+				const progressPercentage =
+					cause.targetAmount > 0
+						? Math.min((causeRaisedAmount / cause.targetAmount) * 100, 100)
+						: 0;
+
+				// Get unique donors for this cause
+				const causeDonors = new Set(
+					causeDonations.map((d) => d.donor.toString())
+				);
+				const causeDonorCount = causeDonors.size;
+
+				// Get item donations for this cause
+				const itemDonations = causeDonations.filter(
+					(donation) => donation.type !== DonationType.MONEY
+				);
+
+				return {
+					...cause.toObject(),
+					raisedAmount: causeRaisedAmount,
+					progressPercentage: Math.round(progressPercentage * 10) / 10, // Round to 1 decimal
+					donorCount: causeDonorCount,
+					totalDonations: causeDonations.length,
+					itemDonationsCount: itemDonations.length,
+					recentDonations: causeDonations
+						.sort(
+							(a, b) =>
+								new Date(b.createdAt).getTime() -
+								new Date(a.createdAt).getTime()
+						)
+						.slice(0, 5) // Get 5 most recent donations
+						.map((donation) => ({
+							id: donation._id,
+							donor: donation.donor,
+							type: donation.type,
+							amount: donation.amount,
+							description: donation.description,
+							status: donation.status,
+							createdAt: donation.createdAt,
+						})),
+				};
+			})
+		);
+
+		// Calculate aggregated donation items from all causes
+		const allDonationItems = campaign.causes
+			.filter(
+				(cause: any) => cause.donationItems && cause.donationItems.length > 0
+			)
+			.flatMap((cause: any) => cause.donationItems || [])
+			.filter(
+				(item: string, index: number, array: string[]) =>
+					array.indexOf(item) === index
+			);
+
+		// Get recent campaign donations
+		const recentCampaignDonations = campaignDonations
+			.sort(
+				(a, b) =>
+					new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+			)
+			.slice(0, 10)
+			.map((donation) => ({
+				id: donation._id,
+				donor: donation.donor,
+				type: donation.type,
+				amount: donation.amount,
+				description: donation.description,
+				status: donation.status,
+				createdAt: donation.createdAt,
+			}));
+
+		// Calculate days remaining
+		const today = new Date();
+		const endDate = new Date(campaign.endDate);
+		const daysRemaining = Math.max(
+			0,
+			Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+		);
+
+		// Calculate progress percentage for campaign
+		const campaignProgress =
+			campaign.totalTargetAmount > 0
+				? Math.min((totalRaisedAmount / campaign.totalTargetAmount) * 100, 100)
+				: 0;
+
+		const response = {
+			campaign: {
+				...campaign.toObject(),
+				totalRaisedAmount,
+				donorCount,
+				progressPercentage: Math.round(campaignProgress * 10) / 10,
+				daysRemaining,
+				allDonationItems,
+				causes: causesWithStats,
+			},
+			statistics: {
+				totalDonations: campaignDonations.length,
+				totalMoneyDonations: campaignDonations.filter(
+					(d) => d.type === DonationType.MONEY
+				).length,
+				totalItemDonations: campaignDonations.filter(
+					(d) => d.type !== DonationType.MONEY
+				).length,
+				averageDonationAmount:
+					campaignDonations.filter((d) => d.type === DonationType.MONEY)
+						.length > 0
+						? totalRaisedAmount /
+							campaignDonations.filter((d) => d.type === DonationType.MONEY)
+								.length
+						: 0,
+				causesWithProgress: causesWithStats.filter(
+					(cause) => cause.progressPercentage > 0
+				).length,
+				causesCompleted: causesWithStats.filter(
+					(cause) => cause.progressPercentage >= 100
+				).length,
+			},
+			recentActivity: recentCampaignDonations,
+		};
+
+		res.status(200).json({
+			status: "success",
+			data: response,
 		});
 	}
 );

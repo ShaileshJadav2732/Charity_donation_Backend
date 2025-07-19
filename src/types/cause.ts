@@ -1,4 +1,5 @@
-// Cause types
+import { DonationType } from "types";
+import mongoose from "mongoose";
 export interface Cause {
 	id: string;
 	title: string;
@@ -54,4 +55,19 @@ export interface UpdateCauseBody {
 	tags?: string[];
 	category?: string;
 	status?: "active" | "completed" | "draft";
+}
+
+export interface ICause extends Document {
+	title: string;
+	description: string;
+	targetAmount: number;
+
+	imageUrl: string;
+	tags: string[];
+	organizationId: mongoose.Types.ObjectId;
+	acceptanceType: "money" | "items" | "both";
+	donationItems: string[];
+	acceptedDonationTypes: DonationType[];
+	createdAt: Date;
+	updatedAt: Date;
 }
