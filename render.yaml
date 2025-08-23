@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: charity-donation-backend
+    env: node
+    rootDir: Charity_donation_Backend
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
