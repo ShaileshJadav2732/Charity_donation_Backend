@@ -2,6 +2,7 @@ services:
   - type: web
     name: charity-donation-backend
     env: node
+    rootDir: ./Charity_donation_Backend
     buildCommand: npm install && npm run build
     startCommand: node dist/server.js
     envVars:
