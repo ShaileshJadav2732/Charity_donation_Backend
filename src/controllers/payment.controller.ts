@@ -127,6 +127,10 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
 				// Update cause raised amount
 				if (causeId && amount) {
 					const cause = await Cause.findById(causeId);
+					if (cause) {
+						cause.raisedAmount = (cause.raisedAmount || 0) + amount;
+						await cause.save();
+					}
 				}
 			}
 

@@ -12,11 +12,15 @@
 		"noImplicitReturns": false,
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
-		"typeRoots": ["./node_modules/@types", "./src/types"],
-		"baseUrl": "./src",
-		"paths": {
-			"*": ["*"]
-		}
+		"typeRoots": [
+			"./node_modules/@types"
+		]
 	},
-	"include": ["src", "types/**/*.d.ts"]
+	"include": [
+		"src/**/*"
+	],
+	"exclude": [
+		"node_modules",
+		"dist"
+	]
 }

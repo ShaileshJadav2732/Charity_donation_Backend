@@ -1,7 +1,7 @@
 // backend/models/campaign.model.ts
 import mongoose, { Schema, Document } from "mongoose";
 
-import { ICampaign } from "types/campaign";
+import { ICampaign } from "../types/campaign";
 
 enum DonationType {
 	MONEY = "MONEY",

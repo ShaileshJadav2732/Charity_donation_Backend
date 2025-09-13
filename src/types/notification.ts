@@ -1,4 +1,4 @@
-import { IUser } from "types";
+import { IUser } from "./index";
 import mongoose, { Document } from "mongoose";
 export interface AuthUser extends IUser {
 	id: string;

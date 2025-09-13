@@ -1,4 +1,4 @@
-import { DonationType } from "types";
+import { DonationType } from "./index";
 export interface OrganizationResponse {
 	id: string;
 	userId: string;

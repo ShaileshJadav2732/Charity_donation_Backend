@@ -1,4 +1,4 @@
-import { DonationType } from "types";
+import { DonationType } from "./index";
 import mongoose from "mongoose";
 export interface Cause {
 	id: string;
@@ -61,7 +61,7 @@ export interface ICause extends Document {
 	title: string;
 	description: string;
 	targetAmount: number;
-
+	raisedAmount?: number; // Optional field for tracking raised amount
 	imageUrl: string;
 	tags: string[];
 	organizationId: mongoose.Types.ObjectId;

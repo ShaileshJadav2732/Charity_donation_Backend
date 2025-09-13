@@ -6,7 +6,7 @@ import Donation from "../models/donation.model";
 import { catchAsync } from "../utils/catchAsync";
 import { AppError } from "../utils/appError";
 import { IUser } from "../types";
-import { ICampaign } from "types/campaign";
+import { ICampaign } from "../types/campaign";
 import { DonationType } from "../types";
 interface AuthRequest extends Omit<Request, "user"> {
 	user?: IUser;
@@ -855,8 +855,8 @@ export const getCampaignDetailsWithDonations = catchAsync(
 					campaignDonations.filter((d) => d.type === DonationType.MONEY)
 						.length > 0
 						? totalRaisedAmount /
-							campaignDonations.filter((d) => d.type === DonationType.MONEY)
-								.length
+						campaignDonations.filter((d) => d.type === DonationType.MONEY)
+							.length
 						: 0,
 				causesWithProgress: causesWithStats.filter(
 					(cause) => cause.progressPercentage > 0

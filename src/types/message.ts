@@ -1,5 +1,6 @@
 import { Socket } from "socket.io";
 import mongoose, { Document } from "mongoose";
+
 export interface AuthenticatedSocket extends Socket {
 	userId?: string;
 	userRole?: string;
@@ -12,15 +13,11 @@ export interface TypingData {
 	isTyping: boolean;
 }
 
-export interface AuthenticatedSocket extends Socket {
-	userId?: string;
-	userRole?: string;
-}
-
 export interface JwtPayload {
 	id: string;
 	role: string;
 }
+
 export interface IConversation extends Document {
 	_id: string;
 	participants: {

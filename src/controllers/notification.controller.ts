@@ -1,6 +1,6 @@
 import { Response } from "express";
 import mongoose from "mongoose";
-import { AuthRequest } from "types/notification";
+import { AuthRequest } from "../types/notification";
 import Notification from "../models/notification.model";
 // Get notifications for a user
 export const getNotifications = async (

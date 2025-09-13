@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { DonationType } from "types";
+import { DonationType } from "./index";
 
 export interface ICampaign extends Document {
 	title: string;
