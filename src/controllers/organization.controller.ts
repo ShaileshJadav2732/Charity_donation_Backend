@@ -15,7 +15,7 @@ import {
 } from "../types/organization";
 import { DonationStatus, DonationType } from "../types";
 const formatOrganizationResponse = (
-	organization: IOrganization
+	organization: IOrganization & { _id: mongoose.Types.ObjectId }
 ): OrganizationResponse => ({
 	id: organization._id.toString(),
 	userId: organization.userId.toString(),
@@ -359,7 +359,7 @@ const calculateCampaignTotals = async (campaignId: string) => {
  * Helper function to format campaign response with calculated totals
  */
 const formatCampaignResponse = async (
-	campaign: ICampaign
+	campaign: ICampaign & { _id: mongoose.Types.ObjectId }
 ): Promise<CampaignResponse> => {
 	const { totalRaisedAmount, totalSupporters } = await calculateCampaignTotals(
 		campaign._id.toString()
