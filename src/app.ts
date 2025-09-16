@@ -24,21 +24,10 @@ const app: Application = express();
 
 connectDB();
 
-const allowedOrigins = ["https://charity-donation-frontend.vercel.app"];
-
 app.use(
 	cors({
-		origin: function (origin, callback) {
-			// allow requests with no origin (like mobile apps, curl, postman)
-			if (!origin || allowedOrigins.includes(origin)) {
-				return callback(null, true);
-			}
-			return callback(new Error("Not allowed by CORS"));
-		},
+		origin: "*",
 		credentials: true,
-		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
-		exposedHeaders: ["Content-Disposition"],
 	})
 );
 
