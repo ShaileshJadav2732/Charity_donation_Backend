@@ -24,7 +24,7 @@ const app: Application = express();
 
 connectDB();
 
-const allowedOrigins = ["http://localhost:3000", "http://localhost:3001"];
+const allowedOrigins = ["https://charity-donation-frontend.vercel.app"];
 
 app.use(
 	cors({
