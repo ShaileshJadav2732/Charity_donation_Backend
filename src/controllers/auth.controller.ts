@@ -61,6 +61,7 @@ export const register = async (req: Request, res: Response) => {
 			user: {
 				id: newUser._id,
 				email: newUser.email,
+				firebaseUid: firebaseUid,
 				role: newUser.role,
 				profileCompleted: newUser.profileCompleted,
 			},
@@ -101,6 +102,7 @@ export const login = async (req: Request, res: Response) => {
 			user: {
 				id: user._id,
 				email: user.email,
+				firebaseUid: firebaseUid,
 				role: user.role,
 				profileCompleted: user.profileCompleted,
 			},
@@ -142,14 +144,26 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 			user: {
 				id: user._id,
 				email: user.email,
+				firebaseUid: decodedToken.uid,
 				role: user.role,
 				profileCompleted: user.profileCompleted,
 			},
 			token,
 		});
-	} catch (error) {
-		return res.status(401).json({ message: "Invalid or expired token" });
-	}
+  } catch (error: any) {
+    // Log the underlying Firebase Admin error for diagnostics
+    console.error("verifyFirebaseToken error:", error);
+
+    // Map common Firebase error codes to structured responses
+    let code = "FIREBASE_AUTH_FAILED";
+    if (error?.code === "auth/id-token-expired") {
+      code = "FIREBASE_TOKEN_EXPIRED";
+    } else if (error?.code === "auth/argument-error") {
+      code = "INVALID_FIREBASE_TOKEN";
+    }
+
+    return res.status(401).json({ message: "Invalid or expired token", code });
+  }
 };
 
 // Get current user profile

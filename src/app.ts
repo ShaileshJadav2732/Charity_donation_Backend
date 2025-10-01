@@ -24,10 +24,21 @@ const app: Application = express();
 
 connectDB();
 
+const allowedOrigins = ["http://localhost:3000", "http://localhost:3001"];
+
 app.use(
 	cors({
-		origin: "*",
+		origin: function (origin, callback) {
+			// allow requests with no origin (like mobile apps, curl, postman)
+			if (!origin || allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+			return callback(new Error("Not allowed by CORS"));
+		},
 		credentials: true,
+		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+		exposedHeaders: ["Content-Disposition"],
 	})
 );
 
