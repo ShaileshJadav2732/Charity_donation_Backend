@@ -42,5 +42,8 @@ temp/
 .DS_Store
 Thumbs.db
 
-
+# Firebase service account credentials
 config/firebase-service-account.json
+*firebase-adminsdk*.json
+*-firebase-*.json
+*.pem
